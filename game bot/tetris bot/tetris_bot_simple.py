@@ -1,4 +1,8 @@
-"""俄羅斯方塊 bot：從畫面、試算到按鍵的教學範例。"""
+"""
+俄羅斯方塊 bot：從畫面、試算到按鍵的教學範例。
+使用方式 python tetris_bot_simple.py --check 先檢查座標與辨識 NEXT
+使用方式 python tetris_bot_simple.py --play 讓 bot 自動玩遊戲
+"""
 
 import sys
 import time
