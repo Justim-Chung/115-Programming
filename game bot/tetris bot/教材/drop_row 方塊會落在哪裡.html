@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>drop_row：方塊會落在哪裡？｜Tetris Bot 教學</title>
+  <style>
+    :root { --ink:#1b2c44; --muted:#63768c; --line:#e0e8ec; --square:25px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f7f3; color:var(--ink); font-family:"Microsoft JhengHei",system-ui,sans-serif; }
+    button,select { font:inherit; } button { cursor:pointer; }
+    button:focus-visible,select:focus-visible { outline:3px solid #2778df; outline-offset:2px; }
+    .wrap { max-width:1380px; margin:auto; padding:20px 32px 28px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:15px; border-bottom:1px solid #dfe5e5; padding-bottom:14px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; letter-spacing:.08em; }
+    .mark { width:25px; height:25px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; transform:rotate(-7deg); }
+    .mark i { background:#263c5c; border-radius:3px; }.mark i:nth-child(2){background:#b87ee3}.mark i:nth-child(3){background:#76cfd1}
+    .chapter { color:#8795a5; font-size:14px; font-weight:700; letter-spacing:.12em; }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:20px 0 16px; }
+    .eyebrow { color:#5a9cae; font-size:13px; font-weight:800; letter-spacing:.15em; margin:0 0 6px; }
+    h1 { font-size:clamp(29px,3.3vw,40px); line-height:1.2; letter-spacing:-.03em; margin:0; }
+    h1 code { color:#3987a2; font-family:Consolas,monospace; }
+    .intro p:last-child { color:var(--muted); font-size:17px; margin:8px 0 0; line-height:1.6; }
+    .badge { font-size:14px; color:#8495a5; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:420px minmax(0,1fr); gap:14px; align-items:start; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:17px; overflow:hidden; }
+    .board-panel { padding:16px 18px 15px; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .heading { font-size:17px; font-weight:800; }.label { color:#92a1b0; font:700 12px Consolas,monospace; letter-spacing:.1em; }
+    .board-hint { margin:6px 0 9px; color:#66788d; font-size:15px; line-height:1.5; }
+    .board-scroll { overflow:auto; }
+    .board { display:grid; grid-template-columns:22px repeat(13,var(--square)); grid-auto-rows:var(--square); gap:1px; width:max-content; }
+    .axis { display:grid; place-items:center; border:0; padding:0; background:transparent; font:12px Consolas,monospace; color:#748599; }
+    button.axis { cursor:pointer; border-radius:4px; }.axis.selected { color:#196d92; background:#d5edf7; font-weight:bold; }
+    .tile { width:var(--square); height:var(--square); padding:0; border:1px solid #e9eef2; border-radius:3px; background:#f2f5f7; position:relative; }
+    button.tile:hover { z-index:2; outline:2px solid #7abbd1; }
+    .tile.selected-col:not(.occupied) { background:#edf6f9; }
+    .tile.landing-row:not(.occupied) { background:#dceff7; }
+    .tile.outside { border-color:transparent; background:transparent; }
+    .tile.occupied { background:#70869f; border-color:#70869f; box-shadow:inset 0 -3px #00000019; }
+    .tile.landing { background:#b2e1f1a8; border:2px dashed #3d9ac0; }
+    .tile.landing-blank { border:1px dashed #9dc5d6; }
+    .tile.landing-origin::after { content:''; position:absolute; top:2px; left:2px; width:5px; height:5px; border-radius:50%; background:#237da3; }
+    .tile.trial { background:#f4ca79; border:2px solid #d99a2d; }
+    .tile.trial.occupied,.tile.trial.outside { background:#f1a7aa; border-color:#cd5660; }
+    .tile.trial-bad { background:#f1a7aa; border:2px solid #cd5660; }
+    .legend { display:flex; gap:10px 15px; flex-wrap:wrap; margin-top:10px; font-size:14px; line-height:1.5; color:#64798c; }
+    .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:#70869f; }
+    .swatch.ghost { background:#b2e1f1; border:1px dashed #3d9ac0; }.swatch.test { background:#f4ca79; }.swatch.fail { background:#f1a7aa; }
+    .right { display:grid; gap:12px; }
+    .setup { padding:15px 18px; }
+    .setup-line { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .small-label { font-size:15px; font-weight:700; color:#5e7186; }
+    select,.btn { min-height:40px; border:1px solid #dce5e9; border-radius:8px; background:#fff; color:#465b71; padding:6px 12px; font-size:15px; font-weight:700; }
+    select { min-width:80px; }.btn:hover:not(:disabled) { background:#f2f5f7; }
+    .btn.primary { color:#fff; background:#253c5a; border-color:#253c5a; }.btn.primary:hover:not(:disabled) { background:#385271; }
+    .btn:disabled { cursor:default; opacity:.48; }
+    .pill { background:#f1f4f7; color:#526b83; padding:7px 10px; font:700 15px Consolas,monospace; border-radius:7px; }
+    .content { display:grid; grid-template-columns:minmax(260px,1fr) minmax(265px,1fr); gap:12px; }
+    .detail { padding:16px 18px; }
+    .position { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .pill.result { background:#e7f5fa; color:#246f8c; }
+    .explain { margin-top:12px; min-height:145px; border-radius:10px; background:#f5f8fa; padding:13px; color:#5c7083; font-size:16px; line-height:1.7; }
+    .explain strong { color:#243d55; }.explain.good { background:#edf8f1; color:#42795c; }.explain.bad { background:#fff0f0; color:#9c5060; }
+    .formula { display:block; margin-top:7px; color:#31526b; font:700 15px/1.7 Consolas,monospace; overflow-wrap:anywhere; }
+    .step-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .step-counter { margin-top:10px; color:#788b9c; font-size:14px; }
+    .code-panel { background:#19263a; color:#e6edf5; border-color:#19263a; padding:16px 18px; }
+    .code-panel .label { color:#879ab1; }
+    .code { margin:14px -6px 0; font:15px/1.85 Consolas,"Courier New",monospace; white-space:pre; overflow:auto; }
+    .line { display:block; padding:0 6px; border-left:3px solid transparent; color:#bdcbd9; }
+    .line.active { background:#ffffff15; border-left-color:#77c9e4; color:#fff; }
+    .code-foot { margin-top:12px; border-top:1px solid #35445b; padding-top:10px; color:#b4c3d3; font-size:14px; line-height:1.6; }
+    .note { display:flex; gap:10px; padding:11px 14px; background:#edf3f4; border-radius:10px; font-size:15px; color:#586f82; line-height:1.6; }
+    .note strong { color:#364e61; }
+    @media (min-width:951px) and (max-width:1220px) { .content { grid-template-columns:1fr; } }
+    @media(max-width:950px) { .layout { grid-template-columns:1fr; } }
+    @media(max-width:620px) { .wrap { padding:16px 14px; } .intro .badge { display:none; } .content { grid-template-columns:1fr; } :root { --square:22px; } .board { grid-template-columns:20px repeat(13,var(--square)); } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>TETRIS BOT <span style="color:#aab4be;font-weight:400">/</span> 程式設計課</div><span class="chapter">互動教室　03</span></header>
+  <div class="intro"><div><p class="eyebrow">FROM CHECKING TO DROPPING</p><h1><code>drop_row()</code>：方塊會落在哪裡？</h1><p>選一個欄位，看看方塊能落到哪裡；再一步步觀察電腦怎麼找出答案。</p></div><span class="badge">選擇欄位　→　向下嘗試　→　找到落點</span></div>
+  <div class="layout">
+    <section class="panel board-panel" aria-label="互動盤面">
+      <div class="panel-head"><span class="heading">選擇方塊的欄位</span><span class="label">BOARD · 20 × 10</span></div>
+      <p class="board-hint">點盤面的任一格或上方欄號，作為方塊左上角所在的欄位。</p>
+      <div class="board-scroll"><div class="board" id="board" aria-label="20 列 10 欄盤面"></div></div>
+      <div class="legend"><span><i class="swatch"></i>已落地方塊</span><span><i class="swatch ghost"></i>最後落點與列</span><span><i class="swatch test"></i>起點／目前試放</span><span><i class="swatch fail"></i>碰撞／出界</span></div>
+    </section>
+    <div class="right">
+      <section class="panel setup" aria-label="選擇方塊與欄位">
+        <div class="panel-head"><span class="heading">先決定要放什麼</span><span class="label">SHAPE & COLUMN</span></div>
+        <div class="setup-line"><label class="small-label" for="piece">方塊</label><select id="piece"><option>T</option><option>I</option><option>J</option><option>L</option><option>O</option><option>S</option><option>Z</option></select><button type="button" id="rotate" class="btn">順時針旋轉 ↻</button><span class="pill" id="direction">0°</span><span class="small-label">換欄位或形狀後，檢查會重新開始。</span></div>
+      </section>
+      <div class="content">
+        <section class="panel detail" aria-label="逐列試放過程">
+          <div class="panel-head"><span class="heading">從最上方開始試</span><span class="label">STEP BY STEP</span></div>
+          <div class="position"><span id="column" class="pill"></span><span id="landing" class="pill result"></span></div>
+          <div id="explain" class="explain" aria-live="polite"></div>
+          <div class="step-actions"><button type="button" id="next" class="btn primary">下一列 →</button><button type="button" id="finish" class="btn">直接看結果</button><button type="button" id="restart" class="btn">重新示範</button></div>
+          <div id="counter" class="step-counter"></div>
+        </section>
+        <section class="panel code-panel" aria-label="Python 程式碼">
+          <div class="panel-head"><span class="heading">對照 Python 程式</span><span class="label">DROP_ROW FUNCTION</span></div>
+          <div class="code" id="code"><span class="line" data-line="def">def drop_row(board, shape, col):</span><span class="line" data-line="initial">    if not fits(board, shape, 0, col):</span><span class="line" data-line="none">        return None</span><span class="line" data-line="start">    row = 0</span><span class="line" data-line="check">    while fits(board, shape, row + 1, col):</span><span class="line" data-line="advance">        row += 1</span><span class="line" data-line="return">    return row</span></div>
+          <div class="code-foot">每次呼叫 <code>fits()</code> 都是在問：方塊放在指定位置，會出界或碰撞嗎？</div>
+        </section>
+      </div>
+      <div class="note"><strong>記住</strong><span><code>drop_row()</code> 是在程式裡「試放」，不會移動遊戲畫面。藍色虛線是算出的最終落點；藍色橫列標示方塊左上角所在的列，黃色／紅色顯示起點或目前試放的位置。</span></div>
+    </div>
+  </div>
+</main>
+<script>
+  const ROWS = 20, COLS = 10;
+  const shapes = { I:[[1,1,1,1]], J:[[1,0,0],[1,1,1]], L:[[0,0,1],[1,1,1]], O:[[1,1],[1,1]], S:[[0,1,1],[1,1,0]], T:[[0,1,0],[1,1,1]], Z:[[1,1,0],[0,1,1]] };
+  const board = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+  board[16] = [0,0,0,0,0,0,0,1,0,0];
+  board[17] = [1,1,0,0,0,0,0,1,0,0];
+  board[18] = [1,1,1,0,0,0,1,1,0,0];
+  board[19] = [1,1,1,1,0,1,1,1,1,0];
+  let piece = 'T', direction = 0, col = 3, stepIndex = -1;
+  function rotate(shape) { return shape[0].map((_, c) => shape.map(line => line[c]).reverse()); }
+  function currentShape() { let shape = shapes[piece]; for (let i = 0; i < direction; i++) shape = rotate(shape); return shape; }
+  // 一次 fits()：只檢查 shape 中值為 1 的格子。
+  function fits(shape, row, column) {
+    for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[0].length; c++) if (shape[r][c]) {
+      const y = row + r, x = column + c;
+      if (y < 0 || y >= ROWS || x < 0 || x >= COLS || board[y][x]) return false;
+    }
+    return true;
+  }
+  // 保留每次 fits() 的結果，供逐列展示；與 Python drop_row 的試放順序相同。
+  function makeTrace(shape, column) {
+    const trace = [{row:0, fits:fits(shape,0,column)}];
+    if (!trace[0].fits) return {trace, landing:null};
+    let row = 0;
+    while (true) {
+      const next = row + 1, ok = fits(shape,next,column);
+      trace.push({row:next, fits:ok});
+      if (!ok) return {trace, landing:row};
+      row = next;
+    }
+  }
+  function resetCheck() { stepIndex = -1; render(); }
+  function selectColumn(column) { col = column; resetCheck(); }
+  function render() {
+    const shape = currentShape(), result = makeTrace(shape,col), trace = result.trace;
+    const current = stepIndex >= 0 ? trace[stepIndex] : null;
+    const complete = stepIndex === trace.length - 1;
+    document.getElementById('piece').value = piece;
+    document.getElementById('direction').textContent = `${direction * 90}°`;
+    document.getElementById('column').textContent = `col = ${col}`;
+    document.getElementById('landing').textContent = result.landing === null ? '起點放不下 → None' : `最後落點 row = ${result.landing}`;
+    document.getElementById('counter').textContent = `已嘗試 ${Math.max(0,stepIndex + 1)} / ${trace.length} 次 fits()`;
+    document.getElementById('next').disabled = complete;
+    document.getElementById('next').textContent = stepIndex < 0 ? '檢查起點 →' : '下一列 →';
+    document.getElementById('finish').disabled = complete;
+
+    const boardEl = document.getElementById('board'); boardEl.replaceChildren();
+    for (let y = -1; y < ROWS + 4; y++) for (let x = -1; x < COLS + 3; x++) {
+      if (y === -1 || x === -1) {
+        const isColumn = y === -1 && x >= 0 && x < COLS;
+        const label = document.createElement(isColumn ? 'button' : 'span');
+        label.className = 'axis' + (isColumn && x === col ? ' selected' : '');
+        label.textContent = isColumn ? x : (x === -1 && y >= 0 && y < ROWS ? y : '');
+        if (isColumn) { label.type = 'button'; label.setAttribute('aria-label', `選擇第 ${x} 欄`); label.addEventListener('click', () => selectColumn(x)); }
+        boardEl.append(label); continue;
+      }
+      const outside = y >= ROWS || x >= COLS;
+      const tile = document.createElement(outside ? 'span' : 'button');
+      if (!outside) { tile.type = 'button'; tile.setAttribute('aria-label', `選擇第 ${x} 欄`); tile.addEventListener('click', () => selectColumn(x)); }
+      tile.className = 'tile' + (outside ? ' outside' : '') + (!outside && board[y][x] ? ' occupied' : '') + (!outside && x === col ? ' selected-col' : '') + (!outside && result.landing !== null && y === result.landing ? ' landing-row' : '');
+      const ghostR = y - result.landing, shapeC = x - col;
+      if (result.landing !== null && ghostR >= 0 && ghostR < shape.length && shapeC >= 0 && shapeC < shape[0].length) {
+        tile.className += shape[ghostR][shapeC] ? ' landing' : ' landing-blank';
+        if (ghostR === 0 && shapeC === 0) tile.className += ' landing-origin';
+      }
+      const shownTrial = current || trace[0];
+      if (shownTrial) {
+        const r = y - shownTrial.row, c = x - col;
+        if (r >= 0 && r < shape.length && c >= 0 && c < shape[0].length && shape[r][c]) {
+          tile.className += !shownTrial.fits && (outside || board[y][x]) ? ' trial-bad' : ' trial';
+        }
+      }
+      boardEl.append(tile);
+    }
+
+    const explanation = document.getElementById('explain'); explanation.className = 'explain';
+    let active = 'def';
+    if (!current) {
+      explanation.innerHTML = result.landing === null
+        ? '<strong>這個欄位在第 0 列就放不下。</strong>按「檢查起點」看看第一次 fits() 的結果。'
+        : '<strong>黃色是起點，藍色虛線是預先算出的落點。</strong>按「檢查起點」，從 row = 0 開始，一次呼叫 fits() 試一個位置。';
+    } else if (!current.fits && current.row === 0) {
+      active = 'none'; explanation.className += ' bad';
+      explanation.innerHTML = `<strong>起點就放不下，回傳 None。</strong><span class="formula">fits(board, shape, 0, ${col}) → False</span>可能是方塊出界，或碰到既有方塊。`;
+    } else if (current.fits) {
+      active = current.row === 0 ? 'initial' : 'advance';
+      explanation.innerHTML = `<strong>第 ${current.row} 列放得下。</strong><span class="formula">fits(board, shape, ${current.row}, ${col}) → True</span>目前 row = ${current.row}；接著再試下一列。`;
+    } else {
+      active = 'return'; explanation.className += ' good';
+      explanation.innerHTML = `<strong>第 ${current.row} 列放不下！</strong><span class="formula">fits(board, shape, ${current.row}, ${col}) → False</span>因此停在上一列，回傳 <strong>row = ${result.landing}</strong>。`;
+    }
+    document.querySelectorAll('#code .line').forEach(el => el.classList.toggle('active',el.dataset.line === active));
+  }
+  document.getElementById('piece').addEventListener('change', event => { piece = event.target.value; direction = 0; resetCheck(); });
+  document.getElementById('rotate').addEventListener('click', () => { direction = (direction + 1) % 4; resetCheck(); });
+  document.getElementById('next').addEventListener('click', () => { const trace = makeTrace(currentShape(),col).trace; if (stepIndex < trace.length - 1) stepIndex++; render(); });
+  document.getElementById('finish').addEventListener('click', () => { stepIndex = makeTrace(currentShape(),col).trace.length - 1; render(); });
+  document.getElementById('restart').addEventListener('click', resetCheck);
+  render();
+</script>
+</body>
+</html>

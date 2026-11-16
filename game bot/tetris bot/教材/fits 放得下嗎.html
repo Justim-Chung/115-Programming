@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fits：這個位置放得下嗎？｜Tetris Bot 教學</title>
+  <style>
+    :root { --ink:#192b43; --muted:#738296; --line:#e2e8ec; --purple:#a255d1; --square:25px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f7f3; color:var(--ink); font-family:"Microsoft JhengHei", system-ui, sans-serif; }
+    button,select { font:inherit; }
+    button { cursor:pointer; }
+    button:focus-visible,select:focus-visible { outline:3px solid #2778df; outline-offset:2px; }
+    .wrap { max-width:1380px; margin:auto; padding:20px 32px 28px; }
+    header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #dfe5e5; padding-bottom:14px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; letter-spacing:.08em; }
+    .mark { width:25px; height:25px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; transform:rotate(-7deg); }
+    .mark i { background:#263c5c; border-radius:3px; } .mark i:nth-child(2) { background:#b87ee3; } .mark i:nth-child(3) { background:#76cfd1; }
+    .chapter { color:#8795a5; font-size:14px; font-weight:700; letter-spacing:.12em; }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:20px 0 16px; }
+    .eyebrow { color:#9671b9; font-size:13px; font-weight:800; letter-spacing:.15em; margin:0 0 6px; }
+    h1 { font-size:clamp(30px,3.3vw,40px); line-height:1.2; letter-spacing:-.03em; margin:0; }
+    h1 code { color:#8c54b5; font-family:Consolas,monospace; }
+    .intro p:last-child { color:var(--muted); font-size:17px; margin:8px 0 0; line-height:1.6; }
+    .badge { font-size:14px; color:#8a99aa; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:420px minmax(0,1fr); gap:14px; align-items:start; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:17px; overflow:hidden; }
+    .board-panel { padding:16px 18px 15px; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .heading { font-size:17px; font-weight:800; } .label { color:#9aa7b4; font:700 12px Consolas,monospace; letter-spacing:.1em; }
+    .board-hint { margin:6px 0 8px; color:#66788d; font-size:15px; line-height:1.5; }
+    .board-scroll { overflow:auto; }
+    .board { display:grid; grid-template-columns:22px repeat(13,var(--square)); grid-auto-rows:var(--square); gap:1px; width:max-content; margin:0 auto; }
+    .axis { display:grid; place-items:center; font:12px Consolas,monospace; color:#748599; }
+    .tile { padding:0; width:var(--square); height:var(--square); border:1px solid #e9eef2; border-radius:3px; background:#f2f5f7; position:relative; }
+    button.tile:hover { z-index:2; outline:2px solid #bf8ddf; }
+    .tile.outside { border-color:transparent; background:transparent; }
+    .tile.occupied { background:#6f859f; border-color:#6f859f; box-shadow:inset 0 -3px #00000019; }
+    .tile.preview { background:#ede3f5; border:2px dashed #a65dcf; }
+    .tile.preview.occupied { background:#c8798a; border-color:#a34d62; }
+    .tile.preview.outside { background:#fce6e7; border-color:#d76b73; }
+    .tile.blank-preview { border:1px dashed #c5b6d0; }
+    .tile.current { outline:3px solid #efb44d; outline-offset:-1px; z-index:3; }
+    .tile.checked { box-shadow:inset 0 0 0 2px #4fa984; }
+    .tile.failed { background:#e66570; border:2px solid #bf4052; }
+    .tile.origin::after { content:''; position:absolute; top:2px; left:2px; width:5px; height:5px; border-radius:50%; background:#8042ad; }
+    .board-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; color:#687b8e; margin-top:9px; }
+    .swatch { display:inline-block; width:11px; height:11px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:#6f859f; }
+    .swatch.preview-key { background:#ede3f5; border:1px dashed #a65dcf; }.swatch.current-key { background:#f6cf79; }
+    .right { display:grid; gap:12px; }
+    .setup { padding:15px 18px; }
+    .setup-line { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .small-label { font-size:15px; font-weight:700; color:#5e7186; }
+    select,.btn { min-height:40px; border:1px solid #dce5e9; border-radius:8px; background:#fff; color:#465b71; padding:6px 12px; font-size:15px; font-weight:700; }
+    select { min-width:80px; }
+    .btn:hover:not(:disabled) { background:#f2f5f7; }
+    .btn.primary { color:white; background:#253c5a; border-color:#253c5a; }
+    .btn.primary:hover:not(:disabled) { background:#385271; }
+    .btn:disabled { cursor:default; opacity:.48; }
+    .presets { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding-top:10px; margin-top:10px; border-top:1px solid #eff2f4; }
+    .preset { min-height:36px; font-size:14px; background:#f7f8fa; }
+    .content { display:grid; grid-template-columns:minmax(260px,1fr) minmax(265px,1fr); gap:12px; }
+    .detail { padding:16px 18px; }
+    .position { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { background:#f1f4f7; color:#5a6f85; padding:7px 10px; font:700 15px Consolas,monospace; border-radius:7px; }
+    .pill.origin-pill { background:#f6edfb; color:#8851af; }
+    .shape-box { margin-top:13px; background:#f8fafb; border:1px solid #eef2f4; border-radius:10px; padding:12px; }
+    .shape-title { color:#66788d; font-size:14px; font-weight:700; margin-bottom:8px; }
+    .shape-grid { display:grid; gap:4px; width:max-content; }
+    .shape-cell { display:grid; place-items:center; width:34px; height:34px; border-radius:6px; color:#788c9b; background:#eaf0f2; font:700 18px Consolas,monospace; }
+    .shape-cell.one { background:#b16bd2; color:#fff; }
+    .shape-cell.current { outline:3px solid #efb44d; outline-offset:0; }
+    .shape-cell.done { box-shadow:inset 0 0 0 2px #4fa984; }
+    .shape-cell.failed { background:#db6473; }
+    .explain { margin-top:12px; min-height:106px; border-radius:10px; background:#f5f8fa; padding:12px; color:#5b6e83; font-size:16px; line-height:1.7; }
+    .explain strong { color:#283c55; }
+    .explain.good { background:#edf8f1; color:#42795c; }.explain.bad { background:#fff0f0; color:#9c5060; }
+    .formula { display:block; margin-top:5px; color:#354d67; font:700 15px/1.6 Consolas,monospace; overflow-wrap:anywhere; }
+    .step-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+    .code-panel { background:#19263a; color:#e6edf5; border-color:#19263a; padding:16px 18px; }
+    .code-panel .label { color:#879ab1; }
+    .code { margin:14px -6px 0; font:15px/1.85 Consolas,"Courier New",monospace; white-space:pre; overflow:auto; }
+    .line { display:block; padding:0 6px; border-left:3px solid transparent; color:#bdcbd9; }
+    .line.active { background:#ffffff15; border-left-color:#dd9ff7; color:#fff; }
+    .code-foot { margin-top:12px; border-top:1px solid #35445b; padding-top:10px; color:#b4c3d3; font-size:14px; line-height:1.6; }
+    .note { display:flex; gap:10px; padding:11px 14px; background:#edf3f4; border-radius:10px; font-size:15px; color:#586f82; line-height:1.6; }
+    .note strong { color:#364e61; }
+    @media (min-width:951px) and (max-width:1220px) { .content { grid-template-columns:1fr; } }
+    @media(max-width:950px) { .layout { grid-template-columns:1fr; } .board-panel { max-width:none; } .board { margin-left:0; } }
+    @media(max-width:620px) { .wrap { padding:16px 14px; } .intro .badge { display:none; } .content { grid-template-columns:1fr; } :root { --square:22px; } .board { grid-template-columns:20px repeat(13,var(--square)); } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>TETRIS BOT <span style="color:#aab4be;font-weight:400">/</span> 程式設計課</div><span class="chapter">互動教室　02</span></header>
+  <div class="intro"><div><p class="eyebrow">FROM POSITION TO DECISION</p><h1><code>fits()</code>：這個位置放得下嗎？</h1><p>點選盤面的一格，讓電腦逐格檢查方塊是否出界或碰撞。</p></div><span class="badge">位置　→　逐格檢查　→　True / False</span></div>
+  <div class="layout">
+    <section class="panel board-panel" aria-label="互動盤面">
+      <div class="panel-head"><span class="heading">模擬盤面</span><span class="label">BOARD · 20 × 10</span></div>
+      <p class="board-hint">點選盤面一格，作為 shape 左上角。右側和底部留白用來顯示出界。</p>
+      <div class="board-scroll"><div id="board" class="board" aria-label="20 列 10 欄盤面"></div></div>
+      <div class="board-legend"><span><i class="swatch"></i>已落地方塊</span><span><i class="swatch preview-key"></i>放置預覽</span><span><i class="swatch current-key"></i>正在檢查</span></div>
+    </section>
+    <div class="right">
+      <section class="panel setup" aria-label="選擇形狀與情境">
+        <div class="panel-head"><span class="heading">先決定要放什麼</span><span class="label">SHAPE & POSITION</span></div>
+        <div class="setup-line"><label class="small-label" for="piece">方塊</label><select id="piece" aria-label="選擇方塊"><option>T</option><option>I</option><option>J</option><option>L</option><option>O</option><option>S</option><option>Z</option></select><button type="button" id="rotate" class="btn">順時針旋轉 ↻</button><span id="direction" class="pill">0°</span><span class="small-label">改變位置或形狀後，檢查會重新開始。</span></div>
+        <div class="presets"><span class="small-label">範例</span><button class="btn preset" data-case="clear">可以放下</button><button class="btn preset" data-case="collision">碰到方塊</button><button class="btn preset" data-case="right">超出右邊</button><button class="btn preset" data-case="bottom">超出底部</button></div>
+      </section>
+      <div class="content">
+        <section class="panel detail" aria-label="檢查步驟">
+          <div class="panel-head"><span class="heading">逐格檢查</span><span class="label">STEP BY STEP</span></div>
+          <div class="position"><span id="position" class="pill origin-pill"></span><span id="progress" class="pill"></span></div>
+          <div class="shape-box"><div class="shape-title">shape：每一個數字對應一格</div><div id="shape" class="shape-grid"></div></div>
+          <div id="explain" class="explain" aria-live="polite"></div>
+          <div class="step-actions"><button id="next" class="btn primary">下一步 →</button><button id="finish" class="btn">直接看結果</button><button id="restart" class="btn">重新檢查</button></div>
+        </section>
+        <section class="panel code-panel" aria-label="Python 程式碼">
+          <div class="panel-head"><span class="heading">對照 Python 程式</span><span class="label">FITS FUNCTION</span></div>
+          <div class="code" id="code"><span class="line" data-line="def">def fits(board, shape, row, col):</span><span class="line" data-line="loop">    for r in range(len(shape)):</span><span class="line" data-line="loop">        for c in range(len(shape[0])):</span><span class="line" data-line="test">            if shape[r][c]:</span><span class="line" data-line="coords">                y, x = row + r, col + c</span><span class="line" data-line="check">                if (y &lt; 0 or y &gt;= ROWS or</span><span class="line" data-line="check">                    x &lt; 0 or x &gt;= COLS or</span><span class="line" data-line="check">                    board[y][x]):</span><span class="line" data-line="false">                    return False</span><span class="line" data-line="true">    return True</span></div>
+          <div class="code-foot">為了容易閱讀，這裡將原程式的一行判斷拆成多行；執行邏輯相同。</div>
+        </section>
+      </div>
+      <div class="note"><strong>記住</strong><span><code>fits()</code> 只回答「這個位置放得下嗎？」不會移動方塊。讓方塊往下試，是 <code>drop_row()</code> 的工作。</span></div>
+    </div>
+  </div>
+</main>
+<script>
+  const ROWS = 20, COLS = 10;
+  const shapes = { I:[[1,1,1,1]], J:[[1,0,0],[1,1,1]], L:[[0,0,1],[1,1,1]], O:[[1,1],[1,1]], S:[[0,1,1],[1,1,0]], T:[[0,1,0],[1,1,1]], Z:[[1,1,0],[0,1,1]] };
+  const board = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+  board[17] = [1,1,0,0,0,0,0,1,0,0];
+  board[18] = [1,1,1,0,0,0,1,1,0,0];
+  board[19] = [1,1,1,1,0,1,1,1,1,0];
+  let piece = 'T', direction = 0, row = 14, col = 3, stepIndex = -1;
+
+  function rotate(shape) { return shape[0].map((_, c) => shape.map(line => line[c]).reverse()); }
+  function currentShape() { let shape = shapes[piece]; for (let i = 0; i < direction; i++) shape = rotate(shape); return shape; }
+  // 依照 Python 的順序檢查；遇到第一個不合法的格子就停止。
+  function makeSteps(shape, originRow, originCol) {
+    const steps = [];
+    for (let r = 0; r < shape.length; r++) {
+      for (let c = 0; c < shape[0].length; c++) {
+        const value = shape[r][c], y = originRow + r, x = originCol + c;
+        let kind = 'skip';
+        if (value) {
+          if (y < 0 || y >= ROWS || x < 0 || x >= COLS) kind = 'outside';
+          else if (board[y][x]) kind = 'collision';
+          else kind = 'safe';
+        }
+        steps.push({r,c,value,y,x,kind});
+        if (kind === 'outside' || kind === 'collision') return steps;
+      }
+    }
+    return steps;
+  }
+  function resetCheck() { stepIndex = -1; render(); }
+  function render() {
+    const shape = currentShape(), steps = makeSteps(shape,row,col);
+    const current = stepIndex >= 0 ? steps[stepIndex] : null;
+    const complete = stepIndex === steps.length - 1;
+    const failed = complete && (current.kind === 'outside' || current.kind === 'collision');
+    document.getElementById('piece').value = piece;
+    document.getElementById('direction').textContent = `${direction * 90}°`;
+    document.getElementById('position').textContent = `row = ${row}, col = ${col}`;
+    document.getElementById('progress').textContent = `檢查 ${Math.max(0, stepIndex + 1)} / ${shape.length * shape[0].length} 格`;
+    document.getElementById('next').disabled = complete;
+    document.getElementById('finish').disabled = complete;
+
+    const shapeEl = document.getElementById('shape'); shapeEl.replaceChildren();
+    shapeEl.style.gridTemplateColumns = `repeat(${shape[0].length}, 34px)`;
+    shape.forEach((line,r) => line.forEach((value,c) => {
+      const el = document.createElement('span');
+      el.className = 'shape-cell' + (value ? ' one' : ''); el.textContent = value;
+      if (current && current.r === r && current.c === c) el.className += failed ? ' current failed' : ' current';
+      else if (steps.slice(0,stepIndex).some(s => s.r === r && s.c === c && s.kind === 'safe')) el.className += ' done';
+      shapeEl.append(el);
+    }));
+
+    const boardEl = document.getElementById('board'); boardEl.replaceChildren();
+    for (let y = -1; y < ROWS + 3; y++) for (let x = -1; x < COLS + 3; x++) {
+      if (y === -1 || x === -1) {
+        const label = document.createElement('span'); label.className = 'axis';
+        label.textContent = y === -1 && x >= 0 && x < COLS ? x : (x === -1 && y >= 0 && y < ROWS ? y : '');
+        boardEl.append(label); continue;
+      }
+      const outside = y >= ROWS || x >= COLS;
+      const tile = document.createElement(outside ? 'span' : 'button');
+      if (!outside) { tile.type = 'button'; tile.setAttribute('aria-label', `選擇第 ${y} 列第 ${x} 欄為左上角`); tile.addEventListener('click', () => { row = y; col = x; resetCheck(); }); }
+      tile.className = 'tile' + (outside ? ' outside' : '') + (!outside && board[y][x] ? ' occupied' : '');
+      const r = y-row, c = x-col, inShape = r >= 0 && r < shape.length && c >= 0 && c < shape[0].length;
+      if (inShape) {
+        tile.className += shape[r][c] ? ' preview' : ' blank-preview';
+        if (r === 0 && c === 0) tile.className += ' origin';
+        if (current && current.r === r && current.c === c) tile.className += failed ? ' current failed' : ' current';
+        else if (steps.slice(0,stepIndex).some(s => s.r === r && s.c === c && s.kind === 'safe')) tile.className += ' checked';
+      }
+      boardEl.append(tile);
+    }
+
+    const explanation = document.getElementById('explain');
+    let active = 'def'; explanation.className = 'explain';
+    if (!current) explanation.innerHTML = '<strong>準備開始。</strong> 虛線是預覽位置；左上角的紫點代表 <code>(row, col)</code>。按「下一步」，依序查看每一格。';
+    else if (current.kind === 'skip') {
+      active = 'test'; explanation.innerHTML = `<strong>shape[${current.r}][${current.c}] = 0</strong><br>這格是空白，不需要檢查盤面，直接跳過。`;
+    } else {
+      const formula = `y = ${row} + ${current.r} = ${current.y}<br>x = ${col} + ${current.c} = ${current.x}`;
+      if (current.kind === 'safe') { active = 'check'; explanation.innerHTML = `<strong>shape[${current.r}][${current.c}] = 1</strong><br>對應 board[${current.y}][${current.x}]，在盤面內且是空白。<span class="formula">${formula}</span>`; }
+      if (current.kind === 'outside') { active = 'false'; explanation.className += ' bad'; explanation.innerHTML = `<strong>超出邊界，回傳 False。</strong><br>shape[${current.r}][${current.c}] 對應 (${current.y}, ${current.x})，不在盤面範圍內。<span class="formula">${formula}</span>`; }
+      if (current.kind === 'collision') { active = 'false'; explanation.className += ' bad'; explanation.innerHTML = `<strong>碰到既有方塊，回傳 False。</strong><br>board[${current.y}][${current.x}] = 1，這個位置不能放。<span class="formula">${formula}</span>`; }
+    }
+    if (complete && !failed) { active = 'true'; explanation.className += ' good'; explanation.innerHTML += '<br><strong>全部檢查完成，回傳 True。</strong>'; }
+    document.querySelectorAll('#code .line').forEach(el => el.classList.toggle('active', el.dataset.line === active));
+  }
+  document.getElementById('piece').addEventListener('change', event => { piece = event.target.value; direction = 0; resetCheck(); });
+  document.getElementById('rotate').addEventListener('click', () => { direction = (direction + 1) % 4; resetCheck(); });
+  document.getElementById('next').addEventListener('click', () => { const steps = makeSteps(currentShape(),row,col); if (stepIndex < steps.length - 1) stepIndex++; render(); });
+  document.getElementById('finish').addEventListener('click', () => { stepIndex = makeSteps(currentShape(),row,col).length - 1; render(); });
+  document.getElementById('restart').addEventListener('click', resetCheck);
+  document.querySelectorAll('[data-case]').forEach(button => button.addEventListener('click', () => {
+    const positions = {clear:[14,3], collision:[17,0], right:[14,8], bottom:[19,8]};
+    piece = 'T'; direction = 0; [row,col] = positions[button.dataset.case]; resetCheck();
+  }));
+  render();
+</script>
+</body>
+</html>

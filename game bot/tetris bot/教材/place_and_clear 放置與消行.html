@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>place_and_clear：放置方塊與消行｜Tetris Bot 教學</title>
+  <style>
+    :root { --ink:#1b2c44; --muted:#62768c; --line:#e0e8ec; --sq:22px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f7f3; color:var(--ink); font-family:"Microsoft JhengHei",system-ui,sans-serif; }
+    button,select { font:inherit; } button { cursor:pointer; }
+    button:focus-visible,select:focus-visible { outline:3px solid #2778df; outline-offset:2px; }
+    .wrap { max-width:1450px; margin:auto; padding:20px 30px 28px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:15px; border-bottom:1px solid #dfe5e5; padding-bottom:14px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; letter-spacing:.08em; }
+    .mark { width:25px; height:25px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; transform:rotate(-7deg); }
+    .mark i { background:#263c5c; border-radius:3px; }.mark i:nth-child(2){background:#b87ee3}.mark i:nth-child(3){background:#76cfd1}
+    .chapter { color:#8795a5; font-size:14px; font-weight:700; letter-spacing:.12em; }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:20px 0 16px; }
+    .eyebrow { color:#a870a9; font-size:13px; font-weight:800; letter-spacing:.15em; margin:0 0 6px; }
+    h1 { font-size:clamp(26px,3vw,38px); line-height:1.2; letter-spacing:-.03em; margin:0; }
+    h1 code { color:#965dad; font-family:Consolas,monospace; }
+    .intro p:last-child { color:var(--muted); font-size:17px; margin:8px 0 0; line-height:1.6; }
+    .badge { font-size:14px; color:#8495a5; white-space:nowrap; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:17px; }
+    .setup { padding:13px 17px; margin-bottom:12px; }
+    .setup-line { display:flex; gap:9px; flex-wrap:wrap; align-items:center; }
+    .small-label { font-size:15px; font-weight:700; color:#5e7186; }
+    select,.btn { min-height:40px; border:1px solid #dce5e9; border-radius:8px; background:#fff; color:#465b71; padding:6px 12px; font-size:15px; font-weight:700; }
+    select { min-width:72px; }.btn:hover:not(:disabled) { background:#f2f5f7; }
+    .btn.primary { color:#fff; background:#253c5a; border-color:#253c5a; }.btn.primary:hover:not(:disabled) { background:#385271; }
+    .btn:disabled { cursor:default; opacity:.45; }
+    .pill { display:inline-block; background:#f1f4f7; color:#526b83; padding:8px 10px; font:700 15px Consolas,monospace; border-radius:7px; }
+    .pill.purple { background:#f5edf9; color:#84509b; }
+    .workspace { display:grid; grid-template-columns:minmax(500px,1.15fr) minmax(360px,1fr); gap:12px; align-items:start; }
+    .boards-panel { padding:16px 18px; overflow:hidden; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .heading { font-size:17px; font-weight:800; }.label { color:#92a1b0; font:700 12px Consolas,monospace; letter-spacing:.1em; }
+    .hint { margin:6px 0 10px; color:#66788d; font-size:15px; line-height:1.5; }
+    .boards-scroll { overflow:auto; }
+    .boards { display:flex; gap:18px; width:max-content; }
+    .board-title { font-size:15px; font-weight:800; margin-bottom:7px; }
+    .board-title span { display:block; font-size:12px; color:#8494a5; font-weight:500; margin-top:3px; }
+    .grid { display:grid; grid-template-columns:22px repeat(10,var(--sq)); grid-auto-rows:var(--sq); gap:1px; width:max-content; }
+    .axis { display:grid; place-items:center; border:0; padding:0; background:transparent; font:12px Consolas,monospace; color:#748599; }
+    button.axis { cursor:pointer; border-radius:4px; }.axis.selected { color:#8650a0; background:#f4e8f9; font-weight:bold; }
+    .cell { position:relative; display:grid; place-items:center; padding:0; width:var(--sq); height:var(--sq); border:1px solid #e5ebef; border-radius:3px; background:#f1f5f6; font:700 11px Consolas,monospace; color:#9baab8; }
+    button.cell:hover { z-index:2; outline:2px solid #bf8ddf; }
+    .cell.filled { background:#70869f; border-color:#70869f; color:#fff; box-shadow:inset 0 -2px #00000018; }
+    .cell.preview { border:2px dashed #a65dcf; background:#e8d7f1; color:#8551a3; }
+    .cell.placed { background:#ad6bcc; border-color:#ad6bcc; color:#fff; }
+    .cell.checking { outline:2px solid #db9c2b; outline-offset:-1px; z-index:1; }
+    .cell.full { background:#f6d18b; border-color:#e4aa46; color:#765212; }
+    .legend { display:flex; gap:10px 15px; flex-wrap:wrap; margin-top:11px; font-size:14px; line-height:1.5; color:#64798c; }
+    .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:#70869f; }
+    .swatch.ghost { background:#e8d7f1; border:1px dashed #a65dcf; }.swatch.placed { background:#ad6bcc; }.swatch.full { background:#f6d18b; }
+    .right { display:grid; gap:12px; min-width:0; }
+    .detail { padding:16px 18px; }
+    .position { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .explain { margin-top:12px; min-height:105px; border-radius:10px; background:#f5f8fa; padding:13px; color:#5c7083; font-size:16px; line-height:1.7; }
+    .explain strong { color:#243d55; }.explain.good { background:#edf8f1; color:#42795c; }.explain.bad { background:#fff0f0; color:#9c5060; }
+    .step-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .code-panel { background:#19263a; color:#e6edf5; border-color:#19263a; padding:16px 18px; overflow:hidden; }
+    .code-panel .label { color:#879ab1; }
+    .code { margin:12px -6px 0; font:14px/1.7 Consolas,"Courier New",monospace; white-space:pre; overflow:auto; }
+    .line { display:block; padding:0 6px; border-left:3px solid transparent; color:#bdcbd9; }
+    .line.active { background:#ffffff15; border-left-color:#d9a4ee; color:#fff; }
+    .note { display:flex; gap:10px; padding:11px 14px; background:#edf3f4; border-radius:10px; font-size:15px; color:#586f82; line-height:1.6; }
+    .note strong { color:#364e61; }
+    @media(max-width:1040px) { .workspace { grid-template-columns:1fr; } }
+    @media(max-width:620px) { .wrap { padding:16px 14px; } .intro .badge { display:none; } .boards { gap:10px; } :root { --sq:20px; } .grid { grid-template-columns:20px repeat(10,var(--sq)); } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>TETRIS BOT <span style="color:#aab4be;font-weight:400">/</span> 程式設計課</div><span class="chapter">互動教室　04</span></header>
+  <div class="intro"><div><p class="eyebrow">FROM A MOVE TO A NEW BOARD</p><h1><code>place_and_clear()</code>：放置方塊與消行</h1><p>目的：<strong>算出放置方塊並消行後，盤面會變成什麼樣子</strong>，並回傳新盤面和消掉的列數。</p></div><span class="badge">複製　→　放置　→　檢查　→　消行</span></div>
+  <section class="panel setup" aria-label="選擇方塊與欄位"><div class="setup-line">
+    <label class="small-label" for="piece">方塊</label><select id="piece"><option>T</option><option>I</option><option>J</option><option>L</option><option>O</option><option>S</option><option>Z</option></select><button type="button" id="rotate" class="btn">順時針旋轉 ↻</button><span class="pill" id="direction">0°</span><span class="small-label">點左邊盤面或欄號，選擇放置欄位。</span><button type="button" id="example" class="btn">回到消行範例</button>
+  </div></section>
+  <div class="workspace">
+    <section class="panel boards-panel" aria-label="原盤面與試算盤面">
+      <div class="panel-head"><span class="heading">比較兩份盤面</span><span class="label">BEFORE & AFTER</span></div>
+      <p class="hint">紫色虛線表示預測落點。右邊的變化不會改動左邊的原盤面。</p>
+      <div class="boards-scroll"><div class="boards">
+        <div><div class="board-title">原盤面 board <span>點選任一格或欄號選欄位</span></div><div id="original" class="grid" aria-label="原盤面"></div></div>
+        <div><div class="board-title">試算盤面 new_board <span>觀察放置、檢查與消行</span></div><div id="simulation" class="grid" aria-label="試算盤面"></div></div>
+      </div></div>
+      <div class="legend"><span><i class="swatch"></i>原有方塊</span><span><i class="swatch ghost"></i>預測落點</span><span><i class="swatch placed"></i>新放方塊：0 → 1</span><span><i class="swatch full"></i>已檢查、填滿的列</span></div>
+    </section>
+    <div class="right">
+      <section class="panel detail" aria-label="試算步驟">
+        <div class="panel-head"><span class="heading">一步步試算</span><span class="label">STEP BY STEP</span></div>
+        <div class="position"><span id="position" class="pill purple"></span><span id="stage" class="pill"></span></div>
+        <div id="explain" class="explain" aria-live="polite"></div>
+        <div class="step-actions"><button type="button" id="next" class="btn primary">下一步 →</button><button type="button" id="finish" class="btn">直接看消行結果</button><button type="button" id="restart" class="btn">重新示範</button></div>
+      </section>
+      <section class="panel code-panel" aria-label="Python 程式碼">
+        <div class="panel-head"><span class="heading">對照 Python 程式</span><span class="label">PLACE_AND_CLEAR</span></div>
+        <div class="code" id="code"><span class="line" data-line="def">def place_and_clear(board, shape, row, col):</span><span class="line" data-line="copy">    new_board = [line[:] for line in board]</span><span class="line" data-line="place">    for r in range(len(shape)):</span><span class="line" data-line="place">        for c in range(len(shape[0])):</span><span class="line" data-line="place">            if shape[r][c]:</span><span class="line" data-line="place">                new_board[row + r][col + c] = 1</span><span class="line" data-line="check">    remaining = [line for line in new_board</span><span class="line" data-line="check">                 if 0 in line]</span><span class="line" data-line="clear">    cleared = ROWS - len(remaining)</span><span class="line" data-line="clear">    return [[0] * COLS for _ in range(cleared)] + remaining, cleared</span></div>
+      </section>
+      <div class="note"><strong>記住</strong><span>試算時修改的是 <code>new_board</code> 的副本；原本的 <code>board</code> 不變，才能公平比較下一種放法。</span></div>
+    </div>
+  </div>
+</main>
+<script>
+  const ROWS = 20, COLS = 10;
+  const shapes = { I:[[1,1,1,1]], J:[[1,0,0],[1,1,1]], L:[[0,0,1],[1,1,1]], O:[[1,1],[1,1]], S:[[0,1,1],[1,1,0]], T:[[0,1,0],[1,1,1]], Z:[[1,1,0],[0,1,1]] };
+  const board = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+  board[18] = [1,0,0,0,0,0,0,0,0,1];
+  board[19] = [1,1,1,0,0,0,1,1,1,1];
+  let piece = 'T', direction = 0, col = 3, phase = 'ready', checked = -1;
+
+  function rotate(shape) { return shape[0].map((_, c) => shape.map(line => line[c]).reverse()); }
+  function currentShape() { let shape = shapes[piece]; for (let i = 0; i < direction; i++) shape = rotate(shape); return shape; }
+  function fits(shape, row, column) {
+    for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[0].length; c++) if (shape[r][c]) {
+      const y = row + r, x = column + c;
+      if (y < 0 || y >= ROWS || x < 0 || x >= COLS || board[y][x]) return false;
+    }
+    return true;
+  }
+  function dropRow(shape, column) {
+    if (!fits(shape,0,column)) return null;
+    let row = 0; while (fits(shape,row+1,column)) row++;
+    return row;
+  }
+  // 複製每一列，避免試放時修改原盤面。
+  function place(shape, row, column) {
+    const copy = board.map(line => line.slice());
+    for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[0].length; c++) if (shape[r][c]) copy[row+r][column+c] = 1;
+    return copy;
+  }
+  function clearLines(placed) {
+    const remaining = placed.filter(line => line.includes(0));
+    const cleared = ROWS - remaining.length;
+    return {board:Array.from({length:cleared}, () => Array(COLS).fill(0)).concat(remaining), cleared};
+  }
+  function resetCheck() { phase = 'ready'; checked = -1; render(); }
+  function selectColumn(column) { col = column; resetCheck(); }
+  function drawBoard(elementId, data, shape, landing, placed, interactive) {
+    const grid = document.getElementById(elementId); grid.replaceChildren();
+    for (let y = -1; y < ROWS; y++) for (let x = -1; x < COLS; x++) {
+      if (y === -1 || x === -1) {
+        const isColumn = y === -1 && x >= 0;
+        const label = document.createElement(interactive && isColumn ? 'button' : 'span');
+        label.className = 'axis' + (isColumn && x === col && interactive ? ' selected' : '');
+        label.textContent = isColumn ? x : (x === -1 && y >= 0 ? y : '');
+        if (interactive && isColumn) { label.type = 'button'; label.setAttribute('aria-label', `選擇第 ${x} 欄`); label.addEventListener('click', () => selectColumn(x)); }
+        grid.append(label); continue;
+      }
+      const el = document.createElement(interactive ? 'button' : 'span');
+      if (interactive) { el.type = 'button'; el.setAttribute('aria-label', `選擇第 ${x} 欄`); el.addEventListener('click', () => selectColumn(x)); }
+      el.className = 'cell' + (data[y][x] ? ' filled' : '');
+      el.textContent = data[y][x];
+      const r = y - landing, c = x - col;
+      const inShape = landing !== null && r >= 0 && r < shape.length && c >= 0 && c < shape[0].length && shape[r][c];
+      if (interactive && inShape) el.className += ' preview';
+      if (!interactive && placed && phase !== 'cleared' && inShape) el.className += ' placed';
+      if (!interactive && phase === 'checking') {
+        if (y <= checked && placed[y].every(value => value === 1)) el.className += ' full';
+        if (y === checked) el.className += ' checking';
+      }
+      grid.append(el);
+    }
+  }
+  function render() {
+    const shape = currentShape(), landing = dropRow(shape,col);
+    const placed = landing === null ? null : place(shape,landing,col);
+    const result = placed ? clearLines(placed) : null;
+    const display = phase === 'ready' || !placed ? board : (phase === 'cleared' ? result.board : placed);
+    drawBoard('original', board, shape, landing, placed, true);
+    drawBoard('simulation', display, shape, landing, placed, false);
+    document.getElementById('piece').value = piece;
+    document.getElementById('direction').textContent = `${direction*90}°`;
+    document.getElementById('position').textContent = landing === null ? `col = ${col}，放不下` : `row = ${landing}, col = ${col}`;
+    document.getElementById('next').disabled = landing === null || phase === 'cleared';
+    document.getElementById('finish').disabled = landing === null || phase === 'cleared';
+
+    let active = 'copy'; const explanation = document.getElementById('explain'); explanation.className = 'explain';
+    if (landing === null) {
+      explanation.className += ' bad'; document.getElementById('stage').textContent = '請換欄位';
+      explanation.innerHTML = '<strong>這個欄位在起點就放不下。</strong>請在左邊選擇其他欄位，或更換形狀。';
+    } else if (phase === 'ready') {
+      document.getElementById('stage').textContent = '1 / 複製盤面';
+      explanation.innerHTML = '<strong>先複製每一列。</strong>右邊一開始與左邊相同；接下來只修改右邊的副本。';
+    } else if (phase === 'placed') {
+      active = 'place'; document.getElementById('stage').textContent = '2 / 放置方塊';
+      explanation.innerHTML = `<strong>已在副本放入 ${piece} 方塊。</strong>紫色的 4 格從 0 變成 1；左邊的原盤面保持不變。`;
+    } else if (phase === 'checking') {
+      active = 'check'; const isFull = placed[checked].every(value => value === 1);
+      const count = placed.slice(0,checked+1).filter(line => line.every(value => value === 1)).length;
+      document.getElementById('stage').textContent = `3 / 檢查第 ${checked} 列`;
+      explanation.innerHTML = isFull
+        ? `<strong>第 ${checked} 列沒有 0，已填滿！</strong>這一列會被消除。目前找到 ${count} 列滿行。`
+        : `<strong>第 ${checked} 列還有 0。</strong>這一列會保留。目前找到 ${count} 列滿行。`;
+      if (checked === ROWS-1) explanation.innerHTML += '<br>已檢查完所有列；再按下一步完成消行。';
+    } else {
+      active = 'clear'; document.getElementById('stage').textContent = '4 / 消行完成'; explanation.className += ' good';
+      explanation.innerHTML = result.cleared
+        ? `<strong>消掉 ${result.cleared} 列。</strong>未填滿的列保留下來並往下移，頂端補上 ${result.cleared} 列空白；原盤面不變。<br>回傳：右邊的新盤面，以及消行數 <code>${result.cleared}</code>。`
+        : '<strong>沒有填滿的列。</strong>放置後的盤面保留；原盤面不變。<br>回傳：右邊的新盤面，以及消行數 <code>0</code>。';
+    }
+    document.querySelectorAll('#code .line').forEach(el => el.classList.toggle('active', el.dataset.line === active));
+  }
+  document.getElementById('piece').addEventListener('change', event => { piece = event.target.value; direction = 0; resetCheck(); });
+  document.getElementById('rotate').addEventListener('click', () => { direction = (direction+1)%4; resetCheck(); });
+  document.getElementById('next').addEventListener('click', () => {
+    if (dropRow(currentShape(),col) === null) return;
+    if (phase === 'ready') phase = 'placed';
+    else if (phase === 'placed') { phase = 'checking'; checked = 0; }
+    else if (phase === 'checking' && checked < ROWS-1) checked++;
+    else if (phase === 'checking') phase = 'cleared';
+    render();
+  });
+  document.getElementById('finish').addEventListener('click', () => { if (dropRow(currentShape(),col) !== null) { phase = 'cleared'; render(); } });
+  document.getElementById('restart').addEventListener('click', resetCheck);
+  document.getElementById('example').addEventListener('click', () => { piece = 'T'; direction = 0; col = 3; resetCheck(); });
+  render();
+</script>
+</body>
+</html>

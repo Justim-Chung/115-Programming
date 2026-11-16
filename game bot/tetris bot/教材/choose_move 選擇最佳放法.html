@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>choose_move：如何選擇最佳放法？｜Tetris Bot 教學</title>
+  <style>
+    :root { --ink:#1b2c44; --muted:#62768c; --line:#e0e8ec; --sq:21px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f7f3; color:var(--ink); font-family:"Microsoft JhengHei",system-ui,sans-serif; }
+    button,select { font:inherit; } button { cursor:pointer; }
+    button:focus-visible,select:focus-visible { outline:3px solid #2778df; outline-offset:2px; }
+    .wrap { max-width:1510px; margin:auto; padding:20px 30px 30px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:15px; border-bottom:1px solid #dfe5e5; padding-bottom:14px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; letter-spacing:.08em; }
+    .mark { width:25px; height:25px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; transform:rotate(-7deg); }
+    .mark i { background:#263c5c; border-radius:3px; }.mark i:nth-child(2){background:#b87ee3}.mark i:nth-child(3){background:#76cfd1}
+    .chapter { color:#8795a5; font-size:14px; font-weight:700; letter-spacing:.12em; }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:20px 0 16px; }
+    .eyebrow { color:#5a9c88; font-size:13px; font-weight:800; letter-spacing:.15em; margin:0 0 6px; }
+    h1 { font-size:clamp(27px,3vw,39px); line-height:1.2; letter-spacing:-.03em; margin:0; }
+    h1 code { color:#4a917a; font-family:Consolas,monospace; }
+    .intro p:last-child { color:var(--muted); font-size:17px; margin:8px 0 0; line-height:1.6; }
+    .badge { font-size:14px; color:#8495a5; white-space:nowrap; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:17px; min-width:0; }
+    .setup { padding:13px 17px; margin-bottom:12px; display:flex; gap:9px; flex-wrap:wrap; align-items:center; }
+    .small-label { font-size:15px; font-weight:700; color:#5e7186; }
+    select,.btn { min-height:40px; border:1px solid #dce5e9; border-radius:8px; background:#fff; color:#465b71; padding:6px 12px; font-size:15px; font-weight:700; }
+    select { min-width:76px; }.btn:hover:not(:disabled) { background:#f2f5f7; }
+    .btn.primary { color:#fff; background:#253c5a; border-color:#253c5a; }.btn.primary:hover:not(:disabled) { background:#385271; }
+    .btn.best { color:#fff; background:#438e74; border-color:#438e74; }.btn.best:hover { background:#377c64; }
+    .btn:disabled { cursor:default; opacity:.45; }
+    .workspace { display:grid; grid-template-columns:minmax(480px,1fr) minmax(400px,1fr); gap:12px; align-items:start; }
+    .boards-panel { padding:16px 18px; overflow:hidden; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .heading { font-size:17px; font-weight:800; }.label { color:#92a1b0; font:700 12px Consolas,monospace; letter-spacing:.1em; }
+    .hint { margin:7px 0 11px; color:#66788d; font-size:15px; line-height:1.5; }
+    .boards-scroll { overflow:auto; }.boards { display:flex; gap:16px; width:max-content; }
+    .board-title { font-size:15px; font-weight:800; margin-bottom:7px; }
+    .board-title span { display:block; font-size:12px; color:#8494a5; font-weight:500; margin-top:3px; }
+    .grid { display:grid; grid-template-columns:22px repeat(10,var(--sq)); grid-auto-rows:var(--sq); gap:1px; width:max-content; }
+    .axis { display:grid; place-items:center; font:12px Consolas,monospace; color:#748599; }
+    .axis.landing-row { color:#176f99; font-weight:800; background:#dceff7; border-radius:3px; }
+    .axis.clear-row { color:#875500; font-weight:800; background:#ffdf8d; border-radius:3px; }
+    .axis.landing-row.clear-row { background:linear-gradient(90deg,#dceff7 50%,#ffdf8d 50%); }
+    .cell { display:grid; place-items:center; width:var(--sq); height:var(--sq); border:1px solid #e5ebef; border-radius:3px; background:#f1f5f6; color:#9baab8; font:700 11px Consolas,monospace; }
+    .cell.filled { background:#70869f; border-color:#70869f; color:#fff; box-shadow:inset 0 -2px #00000018; }
+    .cell.preview { background:#e8d7f1; border:2px dashed #a65dcf; color:#8551a3; }
+    .cell.hole { background:#efb1a3; border-color:#e18b7a; color:#713c35; }
+    .cell.landing-row { box-shadow:inset 0 0 0 50px #54b6e23d; }
+    .cell.clear-row { box-shadow:inset 0 0 0 50px #f4bb3b70; border-top-color:#d99b26; border-bottom-color:#d99b26; }
+    .cell.landing-row.clear-row { box-shadow:inset 0 0 0 50px #54b6e23d, inset 0 0 0 50px #f4bb3b70; }
+    .cell.preview.clear-row { border:2px dashed #a65dcf; }
+    .legend { display:flex; gap:10px 15px; flex-wrap:wrap; margin-top:11px; font-size:14px; line-height:1.5; color:#64798c; }
+    .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:#70869f; }
+    .swatch.ghost { background:#e8d7f1; border:1px dashed #a65dcf; }.swatch.hole { background:#efb1a3; }
+    .swatch.landing-row { background:#b9e3f3; }.swatch.clear-row { background:#f7d483; }
+    .line-summary { margin:10px 0 0; color:#5d7286; font-size:14px; line-height:1.6; }
+    .right { display:grid; gap:12px; min-width:0; }
+    .detail,.candidates,.code-panel { padding:16px 18px; }
+    .position { display:flex; flex-wrap:wrap; gap:8px; margin:11px 0; }
+    .pill { display:inline-block; background:#f1f4f7; color:#526b83; padding:8px 10px; font:700 15px Consolas,monospace; border-radius:7px; }
+    .pill.green { background:#e9f7ee; color:#397f60; }
+    .score { border-radius:10px; padding:13px; background:#f5f8fa; color:#506a7f; font-size:15px; line-height:1.7; }
+    .score .formula { display:block; margin:6px 0; color:#243d55; font:700 16px/1.6 Consolas,monospace; overflow-wrap:anywhere; }
+    .score strong { color:#244a3a; font-size:17px; }
+    .score .clear-badge { display:inline-block; padding:1px 7px; border-radius:6px; background:#ffdfa0; color:#805100; font-weight:800; }
+    .result { margin:10px 0 0; color:#5d7286; font-size:14px; line-height:1.6; }
+    .result.success { color:#307151; font-weight:700; }
+    .controls { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .list { max-height:208px; overflow:auto; margin-top:10px; display:grid; gap:6px; }
+    .candidate { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; text-align:left; border:1px solid #e5ebee; border-radius:8px; background:#fafbfc; padding:9px 10px; color:#53697c; font-size:14px; }
+    .candidate[aria-pressed="true"] { border-color:#6aad96; background:#eaf7ef; color:#276d51; }
+    .candidate-score { font:800 14px Consolas,monospace; white-space:nowrap; }
+    .code-panel { background:#19263a; color:#e6edf5; border-color:#19263a; overflow:hidden; }
+    .code-panel .label { color:#879ab1; }
+    .code { margin:12px -6px 0; font:13px/1.7 Consolas,"Courier New",monospace; white-space:pre; overflow:auto; }
+    .line { display:block; padding:0 6px; color:#bdcbd9; }
+    .note { padding:11px 14px; background:#edf3f4; border-radius:10px; font-size:15px; color:#586f82; line-height:1.6; }
+    .note strong { color:#364e61; }
+    @media(max-width:1050px) { .workspace { grid-template-columns:1fr; } }
+    @media(max-width:620px) { .wrap { padding:16px 14px; } .intro .badge { display:none; } .boards { gap:10px; } :root { --sq:19px; } .grid { grid-template-columns:20px repeat(10,var(--sq)); } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>TETRIS BOT <span style="color:#aab4be;font-weight:400">/</span> 程式設計課</div><span class="chapter">互動教室　06</span></header>
+  <div class="intro"><div><p class="eyebrow">FROM POSSIBILITIES TO A DECISION</p><h1><code>choose_move()</code>：如何選擇最佳放法？</h1><p>逐一試放、計算分數，再從所有可放的方向與欄位中選出最高分。</p></div><span class="badge">列出放法　→　試算盤面　→　評分比較</span></div>
+  <section class="panel setup" aria-label="選擇方塊"><label class="small-label" for="piece">目前方塊</label><select id="piece"><option>T</option><option>I</option><option>J</option><option>L</option><option>O</option><option>S</option><option>Z</option></select><span id="choice-count" class="small-label"></span><span class="small-label">每次試算都從相同的原盤面出發。</span></section>
+  <div class="workspace">
+    <section class="panel boards-panel" aria-label="試放前與試放後">
+      <div class="panel-head"><span class="heading">看看這一種放法</span><span class="label">BEFORE & AFTER</span></div>
+      <p class="hint">左邊同時顯示原盤面與試放預覽；右邊是放下並消行後的盤面。</p>
+      <div class="boards-scroll"><div class="boards">
+        <div><div class="board-title">原盤面與試放預覽 <span>紫色虛線表示預計填入的 1</span></div><div id="original" class="grid" aria-label="原盤面與試放位置"></div></div>
+        <div><div class="board-title">試算後 <span>紅色格子是剩下的洞</span></div><div id="after" class="grid" aria-label="放置並消行後的盤面"></div></div>
+      </div></div>
+      <div class="legend"><span><i class="swatch"></i>方塊（1）</span><span><i class="swatch ghost"></i>試放位置</span><span><i class="swatch landing-row"></i>計分的落點列</span><span><i class="swatch clear-row"></i>將消除的列</span><span><i class="swatch hole"></i>試算後的洞</span></div>
+      <p id="line-summary" class="line-summary"></p>
+    </section>
+    <div class="right">
+      <section class="panel detail" aria-label="目前放法的評分">
+        <div class="panel-head"><span class="heading">這種放法值幾分？</span><span class="label">SCORE</span></div>
+        <div class="position"><span id="position" class="pill"></span><span id="candidate-number" class="pill"></span></div>
+        <div class="score" id="score" aria-live="polite"></div>
+        <div id="result" class="result"></div>
+        <div class="controls"><button type="button" id="previous" class="btn">← 上一種</button><button type="button" id="next" class="btn">下一種 →</button><button type="button" id="best" class="btn best">找出最佳放法 ★</button></div>
+      </section>
+      <section class="panel candidates" aria-label="所有候選放法">
+        <div class="panel-head"><span class="heading">比較所有放法</span><span class="label">CANDIDATES</span></div>
+        <p class="hint">點選任一項，查看放置前後與評分。相同的旋轉形狀只列一次。</p>
+        <div id="list" class="list"></div>
+      </section>
+      <section class="panel code-panel" aria-label="Python 程式碼">
+        <div class="panel-head"><span class="heading">對照 Python 程式</span><span class="label">CHOOSE_MOVE</span></div>
+        <div class="code"><span class="line">def choose_move(board, piece):</span><span class="line">    best = None</span><span class="line">    for turns, shape in enumerate(rotations(SHAPES[piece])):</span><span class="line">        for col in range(COLS - len(shape[0]) + 1):</span><span class="line">            row = drop_row(board, shape, col)</span><span class="line">            if row is None:</span><span class="line">                continue</span><span class="line">            after, cleared = place_and_clear(board, shape, row, col)</span><span class="line">            score = row + 100 * cleared - 50 * count_holes(after)</span><span class="line">            if best is None or score &gt; best[0]:</span><span class="line">                best = (score, turns, col, row, after)</span><span class="line">    return best</span></div>
+      </section>
+      <div class="note"><strong>記住：</strong>這是試算放法，並不會操作遊戲。洞的扣分依據的是<strong>放置並消行後的全部洞數</strong>；若最高分相同，程式保留先遇到的放法。</div>
+    </div>
+  </div>
+</main>
+<script>
+  const ROWS = 20, COLS = 10;
+  const shapes = { I:[[1,1,1,1]], J:[[1,0,0],[1,1,1]], L:[[0,0,1],[1,1,1]], O:[[1,1],[1,1]], S:[[0,1,1],[1,1,0]], T:[[0,1,0],[1,1,1]], Z:[[1,1,0],[0,1,1]] };
+  const board = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+  board[18] = [1,0,0,0,0,0,0,0,0,1];
+  board[19] = [1,1,1,0,0,0,1,1,1,1];
+  let piece = 'T', selected = 0, revealed = false;
+
+  function rotate(shape) { return shape[0].map((_, c) => shape.map(line => line[c]).reverse()); }
+  function rotations(shape) {
+    const result = [];
+    while (!result.some(item => JSON.stringify(item) === JSON.stringify(shape))) { result.push(shape); shape = rotate(shape); }
+    return result;
+  }
+  function fits(shape, row, col) {
+    for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[0].length; c++) if (shape[r][c]) {
+      const y = row+r, x = col+c;
+      if (y < 0 || y >= ROWS || x < 0 || x >= COLS || board[y][x]) return false;
+    }
+    return true;
+  }
+  function dropRow(shape, col) {
+    if (!fits(shape,0,col)) return null;
+    let row=0; while (fits(shape,row+1,col)) row++;
+    return row;
+  }
+  function placeAndClear(shape,row,col) {
+    const copy = board.map(line => line.slice());
+    for (let r=0;r<shape.length;r++) for (let c=0;c<shape[0].length;c++) if (shape[r][c]) copy[row+r][col+c]=1;
+    const clearRows = copy.map((line,index) => line.includes(0) ? -1 : index).filter(index => index >= 0);
+    const remaining = copy.filter(line => line.includes(0)), cleared = ROWS-remaining.length;
+    return {after:Array.from({length:cleared},()=>Array(COLS).fill(0)).concat(remaining), cleared, clearRows};
+  }
+  function holesOn(after) {
+    const holes=[];
+    for (let col=0;col<COLS;col++) {
+      let covered=false;
+      for (let row=0;row<ROWS;row++) {
+        if (after[row][col]) covered=true;
+        else if (covered) holes.push([row,col]);
+      }
+    }
+    return holes;
+  }
+  // 與 Python 相同：依方向、欄位順序試放，再根據落點、消行和洞數評分。
+  function candidatesFor(name) {
+    const moves=[];
+    rotations(shapes[name]).forEach((shape,turns) => {
+      for (let col=0;col<=COLS-shape[0].length;col++) {
+        const row=dropRow(shape,col);
+        if (row === null) continue;
+        const {after,cleared,clearRows}=placeAndClear(shape,row,col), holes=holesOn(after);
+        const score=row+100*cleared-50*holes.length;
+        moves.push({shape,turns,col,row,after,cleared,clearRows,holes,score});
+      }
+    });
+    return moves;
+  }
+  function bestIndex(moves) {
+    let best=0;
+    for (let i=1;i<moves.length;i++) if (moves[i].score>moves[best].score) best=i;
+    return best;
+  }
+  function drawBoard(id,data,move,showPreview) {
+    const grid=document.getElementById(id); grid.replaceChildren();
+    const holes=new Set(move.holes.map(([r,c])=>`${r},${c}`));
+    for(let y=-1;y<ROWS;y++) for(let x=-1;x<COLS;x++) {
+      if(y===-1||x===-1) {
+        const label=document.createElement('span'); label.className='axis';
+        if(showPreview&&x===-1&&y===move.row) label.className+=' landing-row';
+        if(showPreview&&x===-1&&move.clearRows.includes(y)) label.className+=' clear-row';
+        label.textContent=y===-1&&x>=0?x:(x===-1&&y>=0?y:''); grid.append(label); continue;
+      }
+      const el=document.createElement('span'); el.className='cell'+(data[y][x]?' filled':''); el.textContent=data[y][x];
+      const r=y-move.row,c=x-move.col;
+      if(showPreview&&r>=0&&r<move.shape.length&&c>=0&&c<move.shape[0].length&&move.shape[r][c]) { el.className+=' preview'; el.textContent=1; }
+      if(showPreview&&y===move.row) el.className+=' landing-row';
+      if(showPreview&&move.clearRows.includes(y)) el.className+=' clear-row';
+      if(!showPreview&&holes.has(`${y},${x}`)) el.className+=' hole';
+      grid.append(el);
+    }
+  }
+  function render() {
+    const moves=candidatesFor(piece), move=moves[selected], best=bestIndex(moves);
+    document.getElementById('piece').value=piece;
+    document.getElementById('choice-count').textContent=`${rotations(shapes[piece]).length} 種不同方向，共 ${moves.length} 種可放的方式。`;
+    document.getElementById('position').textContent=`轉 ${move.turns} 次 · col = ${move.col} · row = ${move.row}`;
+    document.getElementById('candidate-number').textContent=`第 ${selected+1} / ${moves.length} 種`;
+    document.getElementById('score').innerHTML=`落點列號：${move.row}　＋　消行：<span class="${move.cleared ? 'clear-badge' : ''}">100 × ${move.cleared}</span>　−　洞：50 × ${move.holes.length}<span class="formula">${move.row} + 100 × ${move.cleared} − 50 × ${move.holes.length} = ${move.score}</span><strong>這種放法：${move.score} 分</strong>`;
+    document.getElementById('line-summary').textContent = `藍色：row = ${move.row}，是方塊資料結構左上角所在的列。` + (move.clearRows.length ? ` 金色：試放後第 ${move.clearRows.join('、')} 列填滿，將消除 ${move.cleared} 列。` : ' 這種放法沒有填滿的列，不會消行。');
+    const result=document.getElementById('result');
+    result.className='result'+(revealed?' success':'');
+    result.textContent=revealed
+      ? `最佳放法：轉 ${moves[best].turns} 次、放第 ${moves[best].col} 欄，得 ${moves[best].score} 分。若分數相同，保留先遇到的放法。`
+      : '先試著比較幾種放法，再按「找出最佳放法」。';
+    document.getElementById('previous').disabled=selected===0;
+    document.getElementById('next').disabled=selected===moves.length-1;
+    drawBoard('original',board,move,true); drawBoard('after',move.after,move,false);
+    const list=document.getElementById('list'); list.replaceChildren();
+    moves.forEach((item,index)=>{
+      const button=document.createElement('button'); button.type='button'; button.className='candidate';
+      button.setAttribute('aria-pressed',String(index===selected));
+      const desc=document.createElement('span'); desc.textContent=`轉 ${item.turns} 次 · 第 ${item.col} 欄 · 落第 ${item.row} 列`;
+      const score=document.createElement('span'); score.className='candidate-score'; score.textContent=`${item.score} 分${revealed&&index===best?' ★':''}`;
+      button.append(desc,score); button.addEventListener('click',()=>{selected=index;render();}); list.append(button);
+    });
+  }
+  document.getElementById('piece').addEventListener('change',event=>{piece=event.target.value;selected=0;revealed=false;render();});
+  document.getElementById('previous').addEventListener('click',()=>{if(selected>0)selected--;render();});
+  document.getElementById('next').addEventListener('click',()=>{if(selected<candidatesFor(piece).length-1)selected++;render();});
+  document.getElementById('best').addEventListener('click',()=>{selected=bestIndex(candidatesFor(piece));revealed=true;render();});
+  render();
+</script>
+</body>
+</html>

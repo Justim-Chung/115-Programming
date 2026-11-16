@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>方塊資料結構｜Tetris Bot 教學</title>
+  <style>
+    :root { color-scheme: light; --ink:#17253b; --muted:#66758b; --line:#e3e8ed; --paper:#f7f7f3; --accent:#aa57d8; --accent-soft:#f6edfc; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:"Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
+    button { font:inherit; cursor:pointer; }
+    button:focus-visible { outline:3px solid #2778df; outline-offset:3px; }
+    .wrap { max-width:1360px; margin:auto; padding:24px 42px 28px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-bottom:17px; border-bottom:1px solid #dfe5e5; }
+    .brand { display:flex; align-items:center; gap:11px; font-size:13px; font-weight:800; letter-spacing:.08em; }
+    .brand-mark { width:28px; height:28px; display:grid; grid-template-columns:repeat(2, 1fr); gap:3px; transform:rotate(-7deg); }
+    .brand-mark i { background:#263c5c; border-radius:3px; }
+    .brand-mark i:nth-child(2) { background:#b87ee3; } .brand-mark i:nth-child(3) { background:#76cfd1; }
+    .chapter { font-size:12px; letter-spacing:.12em; color:#7b8897; font-weight:700; }
+    .intro { display:flex; justify-content:space-between; gap:24px; align-items:end; padding:26px 0 19px; }
+    .eyebrow { color:#8561af; font-size:12px; letter-spacing:.15em; font-weight:800; margin:0 0 8px; }
+    h1 { margin:0; font-size:clamp(28px,3vw,41px); letter-spacing:-.04em; line-height:1.2; }
+    .intro p:last-child { color:var(--muted); font-size:15px; margin:9px 0 0; line-height:1.7; }
+    .intro-side { white-space:nowrap; color:#8e9aa7; font-size:12px; font-weight:700; padding-bottom:4px; }
+    .selector { display:flex; align-items:center; gap:10px; margin-bottom:17px; }
+    .selector-label { font-size:13px; font-weight:800; color:#657389; margin-right:6px; white-space:nowrap; }
+    .piece-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+    .piece-btn { min-width:48px; height:39px; border:1px solid #dfe6eb; border-radius:10px; background:#fff; color:#6d7b8e; font-weight:800; transition:.18s; }
+    .piece-btn:hover { transform:translateY(-2px); border-color:var(--piece-color); color:var(--piece-color); }
+    .piece-btn[aria-pressed="true"] { background:var(--piece-color); color:#fff; border-color:var(--piece-color); box-shadow:0 5px 12px color-mix(in srgb,var(--piece-color) 24%, transparent); }
+    .workspace { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .panel { min-width:0; border:1px solid var(--line); background:#fff; border-radius:18px; overflow:hidden; }
+    .panel-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:18px 22px 0; }
+    .panel-title { font-size:14px; font-weight:800; }
+    .panel-kicker { font-family:Consolas, monospace; font-size:10px; letter-spacing:.12em; color:#9aa6b2; font-weight:700; }
+    .visual-body { display:flex; align-items:center; justify-content:center; min-height:246px; gap:clamp(24px,5vw,75px); padding:14px 20px 18px; }
+    .board-outer { display:grid; place-items:center; height:210px; width:210px; border:1px solid #ecf0f3; border-radius:16px; background:#f9fafb; }
+    .grid { display:grid; gap:4px; }
+    .cell { width:42px; height:42px; border-radius:7px; display:grid; place-items:center; color:#aeb8c2; background:#eaf0f3; font:700 13px Consolas, monospace; transition:transform .16s, box-shadow .16s; }
+    .cell.filled { background:var(--accent); color:#fff; box-shadow:inset 0 -4px 0 #00000018, inset 0 1px 0 #ffffff70; }
+    .cell.highlight { transform:scale(1.1); box-shadow:0 0 0 3px #f8cd60, inset 0 -3px 0 #00000018; z-index:1; }
+    .visual-info { min-width:115px; }
+    .piece-big { color:var(--accent); font-size:54px; line-height:1; font-weight:900; letter-spacing:-.05em; }
+    .piece-caption { color:#8794a4; font-size:12px; font-weight:700; margin:7px 0 15px; }
+    .angle-pill { display:inline-flex; padding:6px 10px; border-radius:7px; color:#78609a; background:var(--accent-soft); font:700 12px Consolas, monospace; }
+    .matrix-panel { background:#19263a; color:#edf3fa; border-color:#19263a; }
+    .matrix-panel .panel-kicker { color:#8495ad; }
+    .code-wrap { padding:17px 22px 18px; min-height:246px; display:flex; flex-direction:column; justify-content:center; }
+    .code { color:#e5edf5; font:clamp(17px,1.7vw,22px)/1.65 Consolas, "Courier New", monospace; white-space:pre; }
+    .code .variable { color:#83d3e4; } .code .symbol { color:#9dabc0; }
+    .number { display:inline-block; min-width:1ch; text-align:center; border-radius:4px; transition:.15s; }
+    .number.one { color:#e8b6ff; font-weight:bold; } .number.zero { color:#7b8ba3; }
+    .number.highlight { background:#f8cd60; color:#263348; box-shadow:0 0 0 4px #f8cd60; }
+    .code-foot { display:flex; gap:19px; flex-wrap:wrap; border-top:1px solid #324157; margin-top:16px; padding-top:13px; color:#b1c0d0; font-size:12px; }
+    .key { display:inline-grid; place-items:center; width:19px; height:19px; margin-right:6px; border-radius:5px; font:700 11px Consolas, monospace; }
+    .key.one { background:var(--accent); color:white; } .key.zero { background:#40516a; color:#d7e1eb; }
+    .control-row { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:17px 0 13px; }
+    .rotation-title { font-size:13px; font-weight:800; }
+    .rotation-sub { color:#98a3af; font-size:12px; font-weight:500; margin-left:8px; }
+    .actions { display:flex; gap:8px; }
+    .action { border:1px solid #dfe6eb; background:white; color:#54637a; border-radius:9px; padding:9px 13px; font-size:12px; font-weight:800; }
+    .action.primary { background:#263a58; border-color:#263a58; color:white; }
+    .action:hover { filter:brightness(.96); }
+    .angles { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; }
+    .angle { text-align:left; border:1px solid var(--line); background:#fff; border-radius:13px; padding:11px 13px; min-height:88px; display:flex; justify-content:space-between; align-items:center; gap:8px; color:var(--ink); }
+    .angle[aria-pressed="true"] { border:2px solid var(--accent); background:var(--accent-soft); padding:10px 12px; }
+    .angle-name { font:800 14px Consolas, monospace; }
+    .angle-label { margin-top:5px; font-size:11px; color:#8d99a8; }
+    .mini-grid { display:grid; gap:2px; align-self:center; }
+    .mini-cell { width:12px; height:12px; border-radius:2px; background:#e7edf1; }
+    .mini-cell.filled { background:var(--accent); }
+    .note { display:flex; align-items:center; gap:12px; margin-top:13px; padding:12px 15px; border-radius:11px; background:#eef3f5; color:#66768b; font-size:12px; line-height:1.65; }
+    .note-badge { flex:none; color:#527783; font:800 10px Consolas, monospace; letter-spacing:.06em; }
+    .note strong { color:#31445d; }
+    @media (max-width:760px) { .wrap { padding:20px 18px 26px; } .intro { align-items:start; } .intro-side { display:none; } .workspace { grid-template-columns:1fr; } .visual-body { min-height:220px; } .code-wrap { min-height:190px; } .angles { grid-template-columns:repeat(2,1fr); } .selector { align-items:flex-start; flex-direction:column; } .control-row { align-items:flex-start; flex-direction:column; } }
+    @media (max-width:380px) { .board-outer { width:178px; height:178px; } .cell { width:35px; height:35px; } .visual-body { gap:20px; } .piece-big { font-size:43px; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span> TETRIS BOT <span style="color:#a6b0bb;font-weight:400">/</span> 程式設計課</div>
+      <span class="chapter">互動教室　01</span>
+    </header>
+
+    <section class="intro">
+      <div><p class="eyebrow">FROM SHAPE TO DATA</p><h1>方塊，如何變成串列？</h1><p>選一個方塊，轉動它。觀察圖形與資料如何一起改變。</p></div>
+      <div class="intro-side">觀察圖形　→　理解資料　→　開始運算</div>
+    </section>
+
+    <section class="selector" aria-label="選擇方塊">
+      <span class="selector-label">選擇方塊</span>
+      <div class="piece-buttons" id="piece-buttons"></div>
+    </section>
+
+    <section class="workspace" aria-label="圖形與串列">
+      <div class="panel">
+        <div class="panel-heading"><span class="panel-title">眼睛看到的</span><span class="panel-kicker">THE SHAPE</span></div>
+        <div class="visual-body">
+          <div class="board-outer"><div class="grid" id="main-grid" aria-label="目前方塊的格子"></div></div>
+          <div class="visual-info"><div class="piece-big" id="piece-name">T</div><div class="piece-caption">方塊形狀</div><div class="angle-pill" id="angle-badge">0° / 初始方向</div></div>
+        </div>
+      </div>
+      <div class="panel matrix-panel">
+        <div class="panel-heading"><span class="panel-title">電腦記住的</span><span class="panel-kicker">PYTHON LIST</span></div>
+        <div class="code-wrap">
+          <div class="code" id="code" aria-label="Python 二維串列" aria-live="polite"></div>
+          <div class="code-foot"><span><span class="key one">1</span>有方塊</span><span><span class="key zero">0</span>空白</span><span>每個內層串列代表一列</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="旋轉方向">
+      <div class="control-row">
+        <div class="rotation-title">旋轉與觀察 <span class="rotation-sub">點選方向，或用按鈕逐步旋轉</span></div>
+        <div class="actions"><button class="action" id="reset" type="button">回到 0°</button><button class="action" id="previous" type="button">↶ 逆時針</button><button class="action primary" id="next" type="button">順時針 ↻</button></div>
+      </div>
+      <div class="angles" id="angles"></div>
+    </section>
+    <div class="note"><span class="note-badge">觀察一下</span><span id="observation"></span></div>
+  </main>
+  <script>
+    // 初始形狀與 tetris_bot_simple.py 的 SHAPES 相同。
+    const shapes = {
+      I: [[1,1,1,1]], J: [[1,0,0],[1,1,1]], L: [[0,0,1],[1,1,1]],
+      O: [[1,1],[1,1]], S: [[0,1,1],[1,1,0]], T: [[0,1,0],[1,1,1]], Z: [[1,1,0],[0,1,1]]
+    };
+    const colors = { I:'#24b6c7', J:'#3981db', L:'#ec963e', O:'#dab522', S:'#42b675', T:'#aa57d8', Z:'#df6666' };
+    const names = ['初始方向', '順時針轉 1 次', '順時針轉 2 次', '順時針轉 3 次'];
+    let piece = 'T';
+    let direction = 0;
+
+    // 和 Python 的 zip(*shape[::-1]) 一樣：順時針旋轉 90 度。
+    function rotate(shape) {
+      return shape[0].map((_, col) => shape.map(row => row[col]).reverse());
+    }
+    function allDirections(shape) {
+      const result = [shape];
+      for (let i = 1; i < 4; i++) result.push(rotate(result[i - 1]));
+      return result;
+    }
+    function miniGrid(shape) {
+      const grid = document.createElement('span');
+      grid.className = 'mini-grid';
+      grid.setAttribute('aria-hidden', 'true');
+      grid.style.gridTemplateColumns = `repeat(${shape[0].length}, 12px)`;
+      shape.flat().forEach(value => {
+        const cell = document.createElement('span');
+        cell.className = 'mini-cell' + (value ? ' filled' : '');
+        grid.append(cell);
+      });
+      return grid;
+    }
+    function highlight(row, col, on) {
+      document.querySelectorAll(`[data-cell="${row}-${col}"]`).forEach(el => el.classList.toggle('highlight', on));
+    }
+    function bindHighlight(el, row, col) {
+      el.dataset.cell = `${row}-${col}`;
+      el.addEventListener('mouseenter', () => highlight(row, col, true));
+      el.addEventListener('mouseleave', () => highlight(row, col, false));
+    }
+    function render() {
+      const states = allDirections(shapes[piece]);
+      const shape = states[direction];
+      document.documentElement.style.setProperty('--accent', colors[piece]);
+      document.documentElement.style.setProperty('--accent-soft', colors[piece] + '18');
+      document.getElementById('piece-name').textContent = piece;
+      document.getElementById('angle-badge').textContent = `${direction * 90}° / ${names[direction]}`;
+
+      const buttons = document.getElementById('piece-buttons');
+      buttons.replaceChildren();
+      Object.keys(shapes).forEach(name => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'piece-btn'; button.textContent = name;
+        button.style.setProperty('--piece-color', colors[name]);
+        button.setAttribute('aria-label', `選擇 ${name} 方塊`);
+        button.setAttribute('aria-pressed', String(name === piece));
+        button.addEventListener('click', () => { piece = name; direction = 0; render(); });
+        buttons.append(button);
+      });
+
+      const grid = document.getElementById('main-grid');
+      grid.replaceChildren();
+      grid.style.gridTemplateColumns = `repeat(${shape[0].length}, 42px)`;
+      // 小螢幕的格子較小，欄寬也必須同步縮小。
+      if (window.matchMedia('(max-width: 380px)').matches) grid.style.gridTemplateColumns = `repeat(${shape[0].length}, 35px)`;
+      shape.forEach((row, r) => row.forEach((value, c) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell' + (value ? ' filled' : '');
+        cell.textContent = value;
+        cell.setAttribute('aria-label', `第 ${r} 列第 ${c} 欄，${value ? '有方塊' : '空白'}`);
+        bindHighlight(cell, r, c); grid.append(cell);
+      }));
+
+      const code = document.getElementById('code');
+      code.replaceChildren();
+      const prefix = document.createElement('span'); prefix.className = 'variable'; prefix.textContent = 'shape'; code.append(prefix, ' = [\n');
+      shape.forEach((row, r) => {
+        code.append('    [');
+        row.forEach((value, c) => {
+          const number = document.createElement('span');
+          number.className = `number ${value ? 'one' : 'zero'}`; number.textContent = value;
+          bindHighlight(number, r, c); code.append(number);
+          if (c < row.length - 1) code.append(', ');
+        });
+        code.append(r < shape.length - 1 ? '],\n' : ']\n');
+      });
+      code.append(']');
+
+      const angleList = document.getElementById('angles');
+      angleList.replaceChildren();
+      states.forEach((state, index) => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'angle';
+        button.setAttribute('aria-pressed', String(direction === index));
+        button.setAttribute('aria-label', `${index * 90} 度，${names[index]}`);
+        const labels = document.createElement('span');
+        const title = document.createElement('div'); title.className = 'angle-name'; title.textContent = `${index * 90}°`;
+        const caption = document.createElement('div'); caption.className = 'angle-label'; caption.textContent = index === 0 ? '初始方向' : `轉 ${index} 次`;
+        labels.append(title, caption); button.append(labels, miniGrid(state));
+        button.addEventListener('click', () => { direction = index; render(); }); angleList.append(button);
+      });
+      const unique = new Set(states.map(state => JSON.stringify(state))).size;
+      const observation = document.getElementById('observation');
+      observation.innerHTML = unique === 4
+        ? `<strong>${piece} 方塊的 4 個方向都不同。</strong> 把滑鼠移到格子或數字上，可以對照它們的位置。`
+        : `<strong>${piece} 方塊轉了 4 個方向，但只有 ${unique} 種不同的串列。</strong> 因為形狀對稱，有些方向會重複；bot 的 rotations() 會排除重複。`;
+    }
+    document.getElementById('next').addEventListener('click', () => { direction = (direction + 1) % 4; render(); });
+    document.getElementById('previous').addEventListener('click', () => { direction = (direction + 3) % 4; render(); });
+    document.getElementById('reset').addEventListener('click', () => { direction = 0; render(); });
+    window.addEventListener('resize', render);
+    render();
+  </script>
+</body>
+</html>

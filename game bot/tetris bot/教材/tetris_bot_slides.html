@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>用 pyautogui 做一個 Tetris Bot｜教學簡報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#17253b; --muted:#5d6f84; --paper:#f7f7f3; --line:#e0e7ec; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#0e1724; overflow:hidden; }
+  body { font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+
+  /* 16:9 舞台：不論視窗大小，都等比縮放 */
+  .stage { position:absolute; left:50%; top:50%; width:1600px; height:900px; background:var(--paper); overflow:hidden; transform:translate(-50%,-50%); transform-origin:50% 50%; }
+  .slide { position:absolute; inset:0; padding:60px 90px 100px; background:var(--paper); opacity:0; visibility:hidden; transition:opacity .4s ease, visibility .4s; }
+  .slide.active { opacity:1; visibility:visible; }
+  .slide.cover { background:#14213a; color:#f3f6fb; }
+
+  .kicker { margin:0 0 12px; font-size:20px; font-weight:700; letter-spacing:.12em; color:var(--accent,#7b8a9b); }
+  h2 { margin:0; font-size:54px; font-weight:900; line-height:1.2; letter-spacing:-.01em; }
+  .lead { margin:14px 0 0; font-size:27px; line-height:1.55; color:var(--muted); }
+  .body { margin-top:28px; }
+  .row { display:flex; gap:24px; align-items:stretch; }
+  .col { flex:1; min-width:0; }
+  p { margin:0; }
+
+  .card { background:#fff; border:1px solid var(--line); border-radius:18px; padding:26px 30px; }
+  .card h3 { margin:0 0 10px; font-size:30px; font-weight:800; line-height:1.3; }
+  .card p { font-size:23px; line-height:1.6; color:#44566b; }
+  .card .tag { display:inline-block; font-size:17px; font-weight:700; padding:4px 10px; border-radius:8px; background:#f3ecf9; color:#7d4aa5; margin-bottom:10px; }
+  .card .tag.gold { background:#fbf0dc; color:#8a5a0c; }
+  .card.dark { background:#19263a; color:#e6edf5; border-color:#19263a; }
+  .card.dark p { color:#c3d0de; }
+  .num { font-size:44px; font-weight:900; color:var(--accent,#7b8a9b); line-height:1; margin-bottom:14px; }
+
+  pre.code { margin:0; background:#19263a; color:#e6edf5; border-radius:18px; padding:24px 30px; font:23px/1.6 Consolas,"Courier New",monospace; white-space:pre; overflow:hidden; }
+  pre.code .cm { color:#7f8ea4; }
+  pre.code.small { font-size:20px; }
+
+  .formula { font:800 40px/1.4 Consolas,"Noto Sans TC",monospace; color:#243d55; background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px 28px; text-align:center; }
+  .note { margin-top:22px; font-size:23px; line-height:1.6; color:#4f6276; background:#edf3f4; border-radius:14px; padding:16px 22px; }
+  .note strong { color:#2f4b5e; }
+
+  /* 小型盤面：data-rows 以 / 分列，1 為方塊、0 為空白 */
+  .mb { display:inline-grid; gap:4px; padding:12px; background:#eef3f6; border-radius:12px; font-family:Consolas,monospace; }
+  .cell { display:grid; place-items:center; box-sizing:border-box; border-radius:6px; background:#e7edf1; border:1px solid #dbe3e9; color:#97a6b4; font-weight:700; line-height:1; }
+  .cell.on { background:#70869f; border-color:#70869f; color:#fff; }
+  .cell.new { background:#a862c9; border-color:#a862c9; color:#fff; }
+  .cell.ghost { background:#efe2f7; border:2px dashed #a65dcf; color:#8551a3; }
+  .cell.hole { background:#efb1a3; border-color:#e18b7a; color:#713c35; }
+  .cell.full { background:#f6d18b; border-color:#e4aa46; color:#6f4d12; }
+  .cell.bad { background:#e66570; border:2px solid #bf4052; color:#fff; }
+  .cell.cur { outline:3px solid #e2a13e; outline-offset:-3px; }
+  .cell.ghost2 { background:#dff3f6; border:2px dashed #2b9db0; color:#1f6f7f; }
+  .mbw { display:inline-flex; align-items:flex-start; gap:6px; }
+  .rl { display:flex; flex-direction:column; gap:4px; padding-top:12px; font:17px Consolas,monospace; color:#8593a3; text-align:right; }
+  .rl span { display:block; }
+  .bars { display:flex; align-items:flex-end; gap:5px; height:84px; padding:0 6px; border-bottom:3px solid #9aa8b6; margin:0 auto; width:max-content; }
+  .bars i { display:block; width:24px; background:#70869f; border-radius:4px 4px 0 0; }
+  .tag2 { display:inline-block; font-size:23px; font-weight:800; padding:6px 14px; border-radius:10px; margin-bottom:14px; }
+  .boards { display:flex; gap:34px; align-items:flex-start; justify-content:center; }
+  .bx { text-align:center; }
+  .bx .lab { font-size:22px; font-weight:700; margin-top:10px; }
+  .cap { margin-top:12px; font-size:21px; color:var(--muted); line-height:1.5; text-align:center; }
+  .arrow { align-self:center; font-size:44px; color:#9aa8b6; font-weight:900; }
+  /* 右上角的連結：開啟同資料夾的補充互動頁（新分頁） */
+  .demo-link { position:absolute; right:90px; top:52px; z-index:5; display:inline-flex; align-items:center; font-size:19px; font-weight:700; color:#2c5d86; background:#fff; border:1px solid var(--line); border-radius:999px; padding:7px 18px; text-decoration:none; }
+  .demo-link:hover { color:#a862c9; border-color:#a862c9; }
+  /* 強調公式中的權重數字 */
+  .w50 { color:#d9480f; background:#ffe3d3; font-weight:900; padding:0 5px; border-radius:6px; }
+  .w10 { color:#1864ab; background:#d0ebff; font-weight:900; padding:0 5px; border-radius:6px; }
+
+  /* 逐步出現（按右鍵依序顯示） */
+  .frag { opacity:0; transform:translateY(12px); transition:opacity .45s ease, transform .45s ease; }
+  .frag.on { opacity:1; transform:none; }
+
+  .chip { display:inline-block; padding:10px 16px; margin:4px 4px 4px 0; border-radius:10px; background:#f1f4f7; font:700 24px Consolas,monospace; color:#526b83; }
+  .chip.ok { background:#e7f6ee; color:#2f7a5b; }
+  .chip.no { background:#fde7e4; color:#a4483f; }
+
+  .step { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px 14px; text-align:center; font-size:24px; font-weight:700; line-height:1.4; flex:1; min-width:0; }
+  .step b { display:block; font-size:30px; font-weight:900; color:var(--accent,#7b8a9b); margin-bottom:6px; }
+  .step small { display:block; font-size:19px; font-weight:400; color:var(--muted); margin-top:8px; line-height:1.5; }
+
+  .tree-root { display:inline-block; background:#253c5a; color:#fff; padding:12px 40px; border-radius:16px; font-size:32px; font-weight:900; }
+  .tree-line { width:2px; height:20px; background:#9aa8b6; margin:0 auto; }
+  .q { padding:14px 18px; }
+  .q .n { display:inline-grid; place-items:center; width:38px; height:38px; border-radius:50%; background:var(--accent,#7b8a9b); color:#fff; font-weight:900; font-size:20px; margin-bottom:10px; }
+  .q h3 { margin:0 0 8px; font-size:25px; font-weight:800; line-height:1.35; }
+  .q .fn { font:700 20px/1.4 Consolas,monospace; color:#7d4aa5; }
+
+  .shot { display:grid; grid-template-columns:repeat(6,66px); gap:4px; padding:14px; background:#0f1a2a; border-radius:14px; justify-content:center; }
+  .shot i { position:relative; height:66px; border-radius:6px; background:#1d2c42; }
+  .shot i.on { background:#70869f; }
+  .shot i.p { background:#a862c9; }
+  .shot i::after { content:""; position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:#ffd166; }
+
+  .tile { width:172px; background:#000; border-radius:14px; padding:14px 10px 12px; text-align:center; color:#e6edf5; font-size:20px; }
+  .tile img { height:96px; width:auto; image-rendering:pixelated; display:block; margin:0 auto 10px; }
+
+  .flowbox { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px 12px; text-align:center; font-size:23px; font-weight:700; line-height:1.4; flex:1; min-width:0; }
+  .flowbox small { display:block; font-size:18px; font-weight:400; color:var(--muted); margin-top:6px; font-family:Consolas,monospace; }
+
+  table.t { width:100%; border-collapse:collapse; background:#fff; border-radius:16px; overflow:hidden; font-size:22px; border:1px solid var(--line); }
+  table.t th, table.t td { padding:14px 18px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.5; }
+  table.t th { background:#eef3f6; font-weight:800; }
+  table.t tr:last-child td { border-bottom:none; }
+
+  .links a { display:block; font-size:24px; line-height:1.9; color:#2c5d86; text-decoration:none; border-bottom:1px dotted #b7c6d4; width:fit-content; }
+  .links a:hover { color:#a862c9; }
+  .links code { font:20px Consolas,monospace; color:#7b8a9b; }
+
+  .hint, .pager { position:absolute; bottom:26px; z-index:10; font-size:19px; color:#8694a4; font-variant-numeric:tabular-nums; }
+  .hint { left:90px; }
+  .pager { right:60px; font-size:22px; font-weight:700; color:#6f7f91; }
+  .slide.cover ~ .hint, .slide.cover ~ .pager { color:#8fa0b5; }
+  .progress { position:absolute; left:0; bottom:0; height:5px; z-index:10; background:#a862c9; transition:width .4s ease, background .4s ease; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- 1 封面 -->
+  <section class="slide cover" style="--accent:#8fd3dc">
+    <div class="deco" style="position:absolute;right:150px;top:200px;display:grid;grid-template-columns:repeat(4,76px);gap:8px;">
+      <i style="display:block;width:76px;height:76px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#aa57d8;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;"></i>
+      <i style="display:block;width:76px;height:76px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#aa57d8;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#aa57d8;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#aa57d8;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#dab522;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#dab522;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#3981db;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#dab522;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#dab522;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#3981db;border-radius:10px;"></i>
+      <i style="display:block;width:76px;height:76px;background:#3981db;border-radius:10px;"></i>
+    </div>
+    <p class="kicker" style="margin-top:150px">程式設計課｜Python × pyautogui</p>
+    <h2 style="font-size:84px;color:#fff;">用 pyautogui 做一個<br>Tetris Bot</h2>
+    <p class="lead" style="color:#b9c7d9;font-size:30px;">從畫面、資料到決策：把一個大問題，拆成電腦能算的小問題</p>
+    <p style="margin-top:64px;font-size:22px;color:#8fa0b5;">工管系 · 大一 · 教學簡報（可直接在瀏覽器示範）</p>
+  </section>
+
+  <!-- 2 學習目標 -->
+  <section class="slide" style="--accent:#2b9db0">
+    <p class="kicker">開場｜今天要學的</p>
+    <h2>今天的重點：思考方式，比寫出最強的 bot 更重要</h2>
+    <div class="body">
+      <div class="row">
+        <div class="col card"><div class="num">01</div><h3>轉換：把看到的東西，換成資料</h3><p>盤面是 20 × 10 的二維串列，有方塊填 1、沒有填 0；形狀則是一個小矩陣。</p></div>
+        <div class="col card"><div class="num">02</div><h3>拆解：把「怎麼玩」拆成小問題</h3><p>「放得下嗎？會落在哪？放完會怎樣？」每一個問題，都對應到一個函式。</p></div>
+        <div class="col card"><div class="num">03</div><h3>計算：試遍所有可能，用分數比較</h3><p>把判斷寫成規則，讓電腦對每一種放法算分，再選出最高的那一種。</p></div>
+      </div>
+      <p class="note" style="font-size:24px;margin-top:40px;">本教學的 bot 只用簡單規則。目的是讓每一步都看得懂，而不是打出最高分。</p>
+    </div>
+  </section>
+
+  <!-- 3 高階流程 -->
+  <section class="slide" style="--accent:#2b9db0">
+    <p class="kicker">開場｜先看整體</p>
+    <h2>Bot 玩一步，大致是這樣</h2>
+    <p class="lead">下面每一個方框，之後都會對應到一段程式。</p>
+    <div class="body">
+      <div class="row" style="gap:14px;">
+        <div class="step frag"><b>1</b>觀察畫面<small>截圖，看盤面與 NEXT</small></div>
+        <div class="step frag"><b>2</b>轉成資料<small>盤面變成 0 與 1 的串列</small></div>
+        <div class="step frag"><b>3</b>試各種放法<small>每個方向、每個欄位都試一次</small></div>
+        <div class="step frag"><b>4</b>比較好壞<small>模擬放下、消行、算洞與分數</small></div>
+        <div class="step frag"><b>5</b>按鍵執行<small>旋轉、左右移動、按空白鍵落下</small></div>
+        <div class="step frag"><b>6</b>檢查結果<small>再截圖，比對預測是否一致</small></div>
+        <div class="step frag"><b>7</b>下一輪<small>NEXT 變成目前的方塊，回到第 1 步</small></div>
+      </div>
+      <p class="note frag" style="font-size:24px;margin-top:40px;">↺ 每一輪都是同一套流程：<strong>看 → 想 → 按 → 檢查</strong>。之後的投影片，就是把每一步拆開來看。</p>
+    </div>
+  </section>
+
+  <!-- 4 人 vs 電腦 -->
+  <section class="slide" style="--accent:#a862c9">
+    <p class="kicker">PART 1｜把畫面變成資料</p>
+    <h2>人看到的是「形狀」，電腦需要的是「數字」</h2>
+    <div class="body">
+      <div class="row" style="align-items:center;">
+        <div class="col card" style="text-align:center;">
+          <div class="mb" data-size="58" data-rows="010/111" data-marks="0:1:new 1:0:new 1:1:new 1:2:new" style="background:#f3f6f8"></div>
+          <p style="margin-top:20px;font-size:24px;">人一眼就知道：這是一個 T 形，左邊空著，放得下嗎？</p>
+        </div>
+        <div style="text-align:center;flex:none;">
+          <div class="arrow">→</div>
+          <div style="font-size:20px;color:#8a98a8;font-weight:700;">轉換</div>
+        </div>
+        <div class="col">
+          <pre class="code"><span class="cm"># 盤面的一列（10 欄）</span>
+row = [0, 0, 1, 1, 0, 0, 0, 0, 1, 0]
+
+<span class="cm"># T 形的初始方向（2 列 × 3 欄）</span>
+T = [[0, 1, 0],
+     [1, 1, 1]]</pre>
+          <p class="note">同一件事，換成電腦能精確判斷的數字：每一格只有 0 或 1，程式就能比較、計算、移動它。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 盤面 = 二維串列 -->
+  <section class="slide" style="--accent:#a862c9">
+    <p class="kicker">PART 1｜把畫面變成資料</p>
+    <h2>盤面 = 20 × 10 的二維串列</h2>
+    <p class="lead">列由上往下編號 0～19，欄由左往右編號 0～9。<code>board[row][col]</code> 就是第 row 列、第 col 欄。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:560px;text-align:center;">
+          <div class="mb" data-size="46" data-rows="0000000000/0000000000/0000000000/0000000000/1000000001/1110001111" data-marks="5:0:cur"></div>
+          <p class="cap">下方 6 列（第 14～19 列）；上方的空白列沒有畫出。<br>框起來的格子是 <code>board[19][0]</code>，值為 1。</p>
+        </div>
+        <div class="col">
+          <pre class="code"><span class="cm"># 每個內層串列代表一列</span>
+board = [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],   <span class="cm"># 第 0 列（最上面）</span>
+    <span class="cm"># ……第 1～17 列省略……</span>
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],   <span class="cm"># 第 18 列</span>
+    [1, 1, 1, 0, 0, 0, 1, 1, 1, 1],   <span class="cm"># 第 19 列（最下面）</span>
+]
+print(board[19][0])   <span class="cm"># 1</span></pre>
+          <div class="note frag"><strong>規則只有一個：</strong>有方塊 → 1，沒有 → 0。整個盤面 200 格，就是 200 個數字。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 新增：7 種方塊，每一種都是 4 格 -->
+  <section class="slide" style="--accent:#a862c9">
+    <a class="demo-link" href="方塊資料結構.html" target="_blank">互動示範：方塊資料結構 ↗</a>
+    <p class="kicker">PART 1｜把畫面變成資料</p>
+    <h2>Tetris 有 7 種方塊，每一種都由 4 格組成</h2>
+    <p class="lead">I、O、T、S、Z、J、L。形狀用一個小矩陣表示：1 是有方塊的格子，0 是空白。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:16px;">
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="1111" data-marks="0:0:new 0:1:new 0:2:new 0:3:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">I</h3>
+          <p style="font-size:20px;">一字排開</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="11/11" data-marks="0:0:new 0:1:new 1:0:new 1:1:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">O</h3>
+          <p style="font-size:20px;">2 × 2 方塊</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="010/111" data-marks="0:1:new 1:0:new 1:1:new 1:2:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">T</h3>
+          <p style="font-size:20px;">T 字形</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="011/110" data-marks="0:1:new 0:2:new 1:0:new 1:1:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">S</h3>
+          <p style="font-size:20px;">階梯形</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="110/011" data-marks="0:0:new 0:1:new 1:1:new 1:2:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">Z</h3>
+          <p style="font-size:20px;">反向階梯</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="100/111" data-marks="0:0:new 1:0:new 1:1:new 1:2:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">J</h3>
+          <p style="font-size:20px;">向左勾</p>
+        </div>
+        <div class="card" style="text-align:center;padding:22px 10px 18px;">
+          <div style="height:110px;display:flex;align-items:center;justify-content:center;"><div class="mb" data-size="26" data-rows="001/111" data-marks="0:2:new 1:0:new 1:1:new 1:2:new"></div></div>
+          <h3 style="margin-top:14px;font-size:38px;color:#7d4aa5;">L</h3>
+          <p style="font-size:20px;">向右勾</p>
+        </div>
+      </div>
+      <p class="note" style="margin-top:30px;">每一種都有 <strong>4 個 1</strong>，差別只在排列方式。bot 的 <code>SHAPES</code> 字典就是這 7 個矩陣；之後的旋轉與試放，都從它們開始。</p>
+    </div>
+  </section>
+
+  <!-- 6 形狀與旋轉 -->
+  <section class="slide" style="--accent:#a862c9">
+    <a class="demo-link" href="方塊資料結構.html" target="_blank">互動示範：方塊資料結構 ↗</a>
+    <p class="kicker">PART 1｜把畫面變成資料</p>
+    <h2>形狀也是矩陣：旋轉，就是把數字換位置</h2>
+    <p class="lead">T 形的初始方向是 <code>[[0,1,0],[1,1,1]]</code>；每轉 90 度，就得到一個新的矩陣。</p>
+    <div class="body">
+      <div class="boards">
+        <div class="bx"><div class="mb" data-size="40" data-rows="010/111"></div><div class="lab">0°（初始）</div></div>
+        <div class="bx"><div class="mb" data-size="40" data-rows="10/11/10"></div><div class="lab">順時針 90°</div></div>
+        <div class="bx"><div class="mb" data-size="40" data-rows="111/010"></div><div class="lab">180°</div></div>
+        <div class="bx"><div class="mb" data-size="40" data-rows="01/11/01"></div><div class="lab">270°</div></div>
+      </div>
+      <div class="row" style="margin-top:36px;align-items:stretch;">
+        <div class="col">
+          <pre class="code small"><span class="cm"># 順時針旋轉 90 度</span>
+def rotate(shape):
+    return [list(row) for row in zip(*shape[::-1])]</pre>
+        </div>
+        <div class="col card frag">
+          <h3>旋轉要一直做，直到形狀重複為止</h3>
+          <p><code>rotations()</code> 會依序旋轉，遇到重複的形狀就停止。O 只有 1 種、I／S／Z 有 2 種、J／L／T 有 4 種，重複的方向會自動略過。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充：zip(*shape[::-1]) 拆成三步看 -->
+  <section class="slide" style="--accent:#a862c9">
+    <p class="kicker">PART 1｜補充：旋轉的程式</p>
+    <h2>zip(*shape[::-1])：先翻列，再逐欄取出</h2>
+    <p class="lead">以 T 的初始形狀為例。每按一次右鍵，就看一個步驟的結果。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:1fr 130px 1fr 130px 1fr;align-items:center;">
+        <div style="text-align:center;">
+          <div class="mb" data-size="50" data-rows="010/111" data-marks="0:1:new 1:0:new 1:1:new 1:2:new"></div>
+          <div style="font:700 22px Consolas,monospace;margin-top:12px;">shape</div>
+          <p class="cap">原本的形狀：2 列 × 3 欄</p>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div style="font:800 24px Consolas,monospace;color:#7d4aa5;">[::-1]</div>
+          <div class="arrow" style="font-size:52px;">→</div>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="50" data-rows="111/010" data-marks="0:0:new+cur 0:1:new+cur 0:2:new+cur 1:1:new"></div>
+          <div style="font:700 22px Consolas,monospace;margin-top:12px;">shape[::-1]</div>
+          <p class="cap">最下面那一列（黃框），移到最上面</p>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div style="font:800 24px Consolas,monospace;color:#7d4aa5;">zip(*…)</div>
+          <div class="arrow" style="font-size:52px;">→</div>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="50" data-rows="10/11/10" data-marks="0:0:new 1:0:new 1:1:new 2:0:new"></div>
+          <div style="font:700 22px Consolas,monospace;margin-top:12px;">順時針 90°</div>
+          <p class="cap">原本每一欄，變成新的一列</p>
+        </div>
+      </div>
+      <div class="row frag" style="margin-top:40px;gap:14px;">
+        <div class="step"><b>[::-1]</b>列的順序反過來<small>最下面一列變成第一列</small></div>
+        <div class="step"><b>*</b>拆開外層的串列<small>2 列 → 2 個獨立的參數</small></div>
+        <div class="step"><b>zip</b>每次取「同一欄」<small>得到 (1, 0)、(1, 1)、(1, 0)</small></div>
+        <div class="step"><b>[ … ]</b>把 tuple 換成 list<small>得到 [[1, 0], [1, 1], [1, 0]]</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充：zip(*shape[::-1]) 圖解 1：翻列、解包 -->
+  <section class="slide" style="--accent:#a862c9">
+    <p class="kicker">PART 1｜補充：旋轉的程式（圖解 1／2）</p>
+    <h2>第 1 步：翻轉列，再把外層拆開</h2>
+    <p class="lead">每一列都是一個串列。<code>[::-1]</code> 改變的是列的順序；<code>*</code> 拆開的是最外面那一層 <code>[ ]</code>。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:1fr 150px 1fr;align-items:center;">
+        <div style="text-align:center;">
+          <div class="mb" data-size="50" data-rows="010/111" data-marks="0:1:new 1:0:new 1:1:new 1:2:new"></div>
+          <div style="font:700 22px Consolas,monospace;margin-top:14px;">shape = [[0, 1, 0], [1, 1, 1]]</div>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div style="font:800 26px Consolas,monospace;color:#7d4aa5;">[::-1]</div>
+          <div class="arrow" style="font-size:56px;">→</div>
+        </div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="50" data-rows="111/010" data-marks="0:0:new+cur 0:1:new+cur 0:2:new+cur 1:1:new"></div>
+          <div style="font:700 22px Consolas,monospace;margin-top:14px;">[[1, 1, 1], [0, 1, 0]]</div>
+          <p class="cap">最下面那一列（黃框），移到最上面</p>
+        </div>
+      </div>
+      <div class="frag" style="margin-top:44px;">
+        <p style="text-align:center;font-size:24px;font-weight:700;color:#5d6f84;margin-bottom:18px;"><code>*rows</code> 解包：最外層的 <code>[ ]</code> 拆開，變成 2 個獨立的參數</p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:34px;">
+          <div style="text-align:center;">
+            <div style="font:700 20px Consolas,monospace;color:#7d4aa5;margin-bottom:8px;">第 1 個參數</div>
+            <div class="mb" data-size="40" data-rows="111" data-marks="0:0:new 0:1:new 0:2:new"></div>
+            <div style="font:700 22px Consolas,monospace;margin-top:10px;">[1, 1, 1]</div>
+          </div>
+          <div style="font:900 40px Consolas,monospace;color:#9aa8b6;">,</div>
+          <div style="text-align:center;">
+            <div style="font:700 20px Consolas,monospace;color:#7d4aa5;margin-bottom:8px;">第 2 個參數</div>
+            <div class="mb" data-size="40" data-rows="010" data-marks="0:1:new"></div>
+            <div style="font:700 22px Consolas,monospace;margin-top:10px;">[0, 1, 0]</div>
+          </div>
+        </div>
+        <div class="formula" style="font-size:30px;margin-top:24px;">zip(*rows) ＝ zip([1, 1, 1], [0, 1, 0])</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充：zip(*shape[::-1]) 圖解 2：Z 字走訪與結果 -->
+  <section class="slide" style="--accent:#a862c9">
+    <p class="kicker">PART 1｜補充：旋轉的程式（圖解 2／2）</p>
+    <h2>第 2 步：zip 走 Z 字形，一次取一欄</h2>
+    <p class="lead">兩個串列都從第 0 格開始：先取上面的 1 和下面的 0，折回上面取下一格，再往下取，依此類推。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;gap:44px;">
+        <div class="col" style="flex:none;width:640px;">
+          <svg viewBox="0 0 640 300" width="640" height="300" style="display:block;overflow:visible;" role="img" aria-label="zip 以 Z 字形走過兩個串列">
+            <defs><marker id="zzArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a862c9"/></marker></defs>
+            <text x="0" y="97" font-family="Consolas,monospace" font-size="22" fill="#5d6f84">[1, 1, 1]</text>
+            <text x="0" y="217" font-family="Consolas,monospace" font-size="22" fill="#5d6f84">[0, 1, 0]</text>
+            <rect x="170" y="55" width="70" height="70" rx="8" fill="#70869f"/>
+            <rect x="300" y="55" width="70" height="70" rx="8" fill="#70869f"/>
+            <rect x="430" y="55" width="70" height="70" rx="8" fill="#70869f"/>
+            <rect x="170" y="175" width="70" height="70" rx="8" fill="#e7edf1"/>
+            <rect x="300" y="175" width="70" height="70" rx="8" fill="#70869f"/>
+            <rect x="430" y="175" width="70" height="70" rx="8" fill="#e7edf1"/>
+            <polyline points="205,90 205,210 335,90 335,210 465,90 465,210" fill="none" stroke="#a862c9" stroke-width="4" stroke-linejoin="round" marker-end="url(#zzArrow)"/>
+            <g font-family="Consolas,monospace" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="central" paint-order="stroke" stroke-width="6">
+              <text x="205" y="90" fill="#fff" stroke="#70869f">1</text>
+              <text x="335" y="90" fill="#fff" stroke="#70869f">1</text>
+              <text x="465" y="90" fill="#fff" stroke="#70869f">1</text>
+              <text x="205" y="210" fill="#6b7b8c" stroke="#e7edf1">0</text>
+              <text x="335" y="210" fill="#fff" stroke="#70869f">1</text>
+              <text x="465" y="210" fill="#6b7b8c" stroke="#e7edf1">0</text>
+            </g>
+            <g font-family="Consolas,monospace" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="#fff">
+              <circle cx="205" cy="26" r="14" fill="#a862c9"/><text x="205" y="26">1</text>
+              <circle cx="205" cy="274" r="14" fill="#a862c9"/><text x="205" y="274">2</text>
+              <circle cx="335" cy="26" r="14" fill="#a862c9"/><text x="335" y="26">3</text>
+              <circle cx="335" cy="274" r="14" fill="#a862c9"/><text x="335" y="274">4</text>
+              <circle cx="465" cy="26" r="14" fill="#a862c9"/><text x="465" y="26">5</text>
+              <circle cx="465" cy="274" r="14" fill="#a862c9"/><text x="465" y="274">6</text>
+            </g>
+          </svg>
+          <div class="row" style="gap:12px;margin-top:6px;">
+            <div class="step frag"><b>(1, 0)</b><small>點 1 → 點 2<br>第 0 欄</small></div>
+            <div class="step frag"><b>(1, 1)</b><small>點 3 → 點 4<br>第 1 欄</small></div>
+            <div class="step frag"><b>(1, 0)</b><small>點 5 → 點 6<br>第 2 欄</small></div>
+          </div>
+        </div>
+        <div class="col" style="text-align:center;">
+          <div class="frag">
+            <p style="font-size:22px;color:#5d6f84;">zip 的結果：一組一組的 tuple</p>
+            <div class="formula" style="font-size:28px;margin-top:8px;">[(1, 0), (1, 1), (1, 0)]</div>
+          </div>
+          <div class="frag" style="margin-top:18px;">
+            <p style="font-size:22px;color:#5d6f84;"><code>[list(r) for r in zip(*rows)]</code> → 換成 list</p>
+            <div class="formula" style="font-size:28px;margin-top:8px;">[[1, 0], [1, 1], [1, 0]]</div>
+          </div>
+          <div class="frag" style="margin-top:20px;display:flex;flex-direction:column;align-items:center;">
+            <div class="mb" data-size="46" data-rows="10/11/10" data-marks="0:0:new 1:0:new 1:1:new 2:0:new"></div>
+            <div style="font:700 22px Consolas,monospace;margin-top:10px;">順時針 90° 的 T</div>
+          </div>
+          <p class="cap frag" style="margin-top:12px;">原本最左邊那一欄（由下往上讀），變成最上面那一列。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 拆解樹 -->
+  <section class="slide" style="--accent:#2b9db0">
+    <p class="kicker">PART 2｜把大問題拆開</p>
+    <h2>「怎麼玩 Tetris」太大，拆成 7 個小問題</h2>
+    <p class="lead">每一個小問題，只需要一個答案：是或否、一個位置、或一個分數。</p>
+    <div class="body" style="margin-top:26px;">
+      <div style="text-align:center;"><span class="tree-root">Bot 要怎麼玩 Tetris？</span></div>
+      <div class="tree-line"></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;">
+        <div class="card q"><div class="n">1</div><h3>盤面與下一塊是什麼？</h3><div class="fn">read_board · read_next</div></div>
+        <div class="card q"><div class="n">2</div><h3>這個位置放得下嗎？</h3><div class="fn">fits</div></div>
+        <div class="card q"><div class="n">3</div><h3>往下掉會停在哪一列？</h3><div class="fn">drop_row</div></div>
+        <div class="card q"><div class="n">4</div><h3>放下、消行後，盤面變成什麼？</h3><div class="fn">place_and_clear</div></div>
+        <div class="card q"><div class="n">5</div><h3>這樣會留下幾個洞？</h3><div class="fn">count_holes</div></div>
+        <div class="card q"><div class="n">6</div><h3>哪一種放法分數最高？</h3><div class="fn">choose_move</div></div>
+        <div class="card q"><div class="n">7</div><h3>按鍵後，結果符合預期嗎？</h3><div class="fn">send_move · check_board</div></div>
+      </div>
+      <p class="note" style="margin-top:18px;">拆解的關鍵：把每個小問題的<strong>輸入與輸出</strong>說清楚，例如「盤面 + 形狀 + 位置 → True / False」。</p>
+    </div>
+  </section>
+
+  <!-- 8 fits -->
+  <section class="slide" style="--accent:#2b9db0">
+    <a class="demo-link" href="fits%20放得下嗎.html" target="_blank">互動示範：fits() ↗</a>
+    <p class="kicker">PART 2｜小問題 ②</p>
+    <h2>fits()：這個位置放得下嗎？</h2>
+    <p class="lead">只檢查形狀中值為 1 的格子：會不會超出邊界？會不會碰到已經落地的方塊？</p>
+    <div class="body">
+      <div class="boards">
+        <div class="bx"><div class="mb" data-size="36" data-rows="0000000000/0000000000/1000000001/1110001111" data-marks="0:4:ghost 1:3:ghost 1:4:ghost 1:5:ghost"></div><div class="lab" style="color:#2f7a5b;">✓ 放得下 → True</div></div>
+        <div class="bx"><div class="mb" data-size="36" data-rows="0000000000/0000000000/1000000001/1110001111" data-marks="1:1:ghost 2:0:bad 2:1:ghost 2:2:ghost"></div><div class="lab" style="color:#a4483f;">✗ 碰到方塊 → False</div></div>
+        <p class="cap" style="max-width:360px;text-align:left;margin:0 0 0 20px;align-self:center;">紫色虛線是預計放的 T 形；紅色是碰到的既有方塊。</p>
+      </div>
+      <div class="row" style="margin-top:30px;align-items:stretch;">
+        <div class="col">
+          <pre class="code"><span class="cm"># 只檢查形狀中值為 1 的格子</span>
+y, x = row + r, col + c              <span class="cm"># 換算成盤面座標</span>
+if y &lt; 0 or y &gt;= ROWS or x &lt; 0 or x &gt;= COLS or board[y][x]:
+    return False                     <span class="cm"># 出界或碰撞 → False</span>
+return True                          <span class="cm"># 全部通過 → True</span></pre>
+        </div>
+        <div class="col card frag" style="flex:none;width:420px;">
+          <h3>fits 只回答一件事</h3>
+          <p>「這個位置放得下嗎？」它<strong>不會移動方塊</strong>。讓方塊往下試，是下一個函式 <code>drop_row()</code> 的工作。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 drop_row -->
+  <section class="slide" style="--accent:#2b9db0">
+    <a class="demo-link" href="drop_row%20方塊會落在哪裡.html" target="_blank">互動示範：drop_row() ↗</a>
+    <p class="kicker">PART 2｜小問題 ③</p>
+    <h2>drop_row()：一列一列往下試，停在最後放得下的那列</h2>
+    <p class="lead">從最上面開始，每次只往下一列；再往下就放不下時，目前的列就是落點。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:560px;">
+          <div style="text-align:center;"><div class="mb" data-size="40" data-rows="0000000000/0000000000/1000000001/1110001111" data-marks="2:4:ghost 3:3:ghost 3:4:ghost 3:5:ghost"></div></div>
+          <p class="cap">虛線是 T 形的落點：左上角在 <code>row = 18</code>。</p>
+          <div style="margin-top:22px;">
+            <div class="frag"><span class="chip ok">row = 0 ～ 17：都 ✓</span></div>
+            <div class="frag"><span class="chip ok">row = 18：✓</span></div>
+            <div class="frag"><span class="chip no">row = 19：✗ 超出底部</span></div>
+            <div class="frag" style="margin-top:14px;"><div class="formula" style="font-size:34px;padding:12px 20px;">回傳 row = 18</div></div>
+          </div>
+        </div>
+        <div class="col">
+          <pre class="code"><span class="cm"># 一開始連 row = 0 都放不下 → None</span>
+def drop_row(board, shape, col):
+    if not fits(board, shape, 0, col):
+        return None
+    row = 0
+    <span class="cm"># 再往下一列還放得下，就繼續往下</span>
+    while fits(board, shape, row + 1, col):
+        row += 1
+    return row                 <span class="cm"># 最後放得下的那一列</span></pre>
+          <p class="note">注意：<code>row</code> 記的是方塊<strong>左上角</strong>所在的列，不是方塊的底部。之後的評分會受到這一點影響。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 place_and_clear -->
+  <section class="slide" style="--accent:#2b9db0">
+    <a class="demo-link" href="place_and_clear%20放置與消行.html" target="_blank">互動示範：place_and_clear() ↗</a>
+    <p class="kicker">PART 2｜小問題 ④</p>
+    <h2>place_and_clear()：放下、檢查，再消掉滿的列</h2>
+    <p class="lead">一切都在<strong>副本</strong>上進行，原本的盤面不變，才能公平比較下一種放法。</p>
+    <div class="body">
+      <div class="boards" style="gap:18px;">
+        <div class="bx"><div class="mb" data-size="34" data-rows="0000000000/0000000000/1000000001/1110001111"></div><div class="lab">① 原盤面 board</div></div>
+        <div class="arrow">→</div>
+        <div class="bx"><div class="mb" data-size="34" data-rows="0000000000/0000000000/1000100001/1111111111" data-marks="2:4:new 3:0:full 3:1:full 3:2:full 3:3:new 3:4:new 3:5:new 3:6:full 3:7:full 3:8:full 3:9:full"></div><div class="lab">② 放入 T 形（紫色）</div></div>
+        <div class="arrow">→</div>
+        <div class="bx"><div class="mb" data-size="34" data-rows="0000000000/0000000000/0000000000/1000100001"></div><div class="lab">③ 消掉 1 行，頂端補空列</div></div>
+      </div>
+      <div style="margin-top:28px;">
+        <pre class="code small"><span class="cm"># 原盤面 board 不會被改動</span>
+new_board = [line[:] for line in board]        <span class="cm"># 複製一份</span>
+<span class="cm"># ……把 shape 中為 1 的格子寫入 new_board……</span>
+remaining = [line for line in new_board if 0 in line]   <span class="cm"># 留下還有空格的列</span>
+cleared = ROWS - len(remaining)                         <span class="cm"># 消掉的列數</span>
+return [[0] * COLS for _ in range(cleared)] + remaining, cleared   <span class="cm"># 回傳新盤面與消行數</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 count_holes -->
+  <section class="slide" style="--accent:#2b9db0">
+    <a class="demo-link" href="count_holes%20計算洞.html" target="_blank">互動示範：count_holes() ↗</a>
+    <p class="kicker">PART 2｜小問題 ⑤</p>
+    <h2>count_holes()：數一數被蓋住的空格</h2>
+    <p class="lead">洞 = 同一欄裡，<strong>上面已經有方塊</strong>的空格。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:560px;text-align:center;">
+          <div class="mb" data-size="44" data-rows="0000000000/0001110000/0001000000/1111000000" data-marks="2:4:hole 2:5:hole 3:4:hole 3:5:hole"></div>
+          <p class="cap">紅色的 4 格是洞：它們的上方都有方塊。<br>第 3 欄與第 6～9 欄沒有洞。</p>
+          <div class="frag" style="margin-top:22px;"><div class="formula" style="font-size:34px;padding:14px 20px;">holes = 4</div></div>
+        </div>
+        <div class="col">
+          <pre class="code small"><span class="cm"># 逐欄檢查</span>
+def count_holes(board):
+    holes = 0
+    for col in range(COLS):
+        covered = False                  <span class="cm"># 這一欄上面有方塊了嗎？</span>
+        for row in range(ROWS):          <span class="cm"># 由上往下看</span>
+            if board[row][col]:
+                covered = True
+            elif covered:                <span class="cm"># 空格且上方有方塊 → 洞</span>
+                holes += 1
+    return holes</pre>
+          <p class="note">洞一旦形成，就要先消掉上面的方塊才能補上，之後的方塊更難放，所以我們要扣分。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 choose_move -->
+  <section class="slide" style="--accent:#2b9db0">
+    <a class="demo-link" href="choose_move%20選擇最佳放法.html" target="_blank">互動示範：choose_move() ↗</a>
+    <p class="kicker">PART 2｜小問題 ⑥</p>
+    <h2>choose_move()：把所有可能都試一遍，留下最高分</h2>
+    <p class="lead">以 T 方塊為例，共有 34 種放法。</p>
+    <div class="body">
+      <div class="row" style="align-items:stretch;">
+        <div class="col" style="flex:none;width:560px;display:flex;flex-direction:column;gap:14px;">
+          <div class="card" style="padding:18px 24px;"><p style="font-size:23px;"><strong>① 方向：</strong>T 有 4 種（0°、90°、180°、270°）</p></div>
+          <div class="card" style="padding:18px 24px;"><p style="font-size:23px;"><strong>② 欄位：</strong>寬 3 的方向有 8 個欄位，寬 2 的方向有 9 個</p></div>
+          <div class="card" style="padding:18px 24px;"><p style="font-size:23px;"><strong>③ 每一種：</strong>落下 → 放置與消行 → 算分 → 記住最高分</p></div>
+          <div class="formula frag" style="font-size:34px;">8 + 9 + 8 + 9 = 34 種</div>
+        </div>
+        <div class="col">
+          <pre class="code small"><span class="cm"># 逐一試放，記住最高分</span>
+def choose_move(board, piece):
+    best = None
+    for turns, shape in enumerate(rotations(SHAPES[piece])):
+        for col in range(COLS - len(shape[0]) + 1):
+            row = drop_row(board, shape, col)
+            if row is None:
+                continue
+            after, cleared = place_and_clear(board, shape, row, col)
+            score = row + 100 * cleared - 50 * count_holes(after)
+            if best is None or score &gt; best[0]:
+                best = (score, turns, col, row, after)
+    return best</pre>
+          <p class="note">同分怎麼辦？程式用 <code>&gt;</code> 而不是 <code>&gt;=</code>，所以<strong>保留先遇到的放法</strong>。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 評分設計 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">PART 3｜評分的設計</p>
+    <h2>分數 = 列號 + 100 × 消行數 − 50 × 洞數</h2>
+    <p class="lead">先看懂每一條規則想解決什麼問題，之後再來質疑它。</p>
+    <div class="body">
+      <div class="formula">分數 = 落點列號 + 100 × 消行數 − 50 × 洞數</div>
+      <div class="row" style="margin-top:30px;">
+        <div class="col card"><span class="tag gold">消行數 × 100</span><h3>消一行，盤面就少一行</h3><p>這是最直接的好處：消掉的列不再佔空間，也就降低了之後的風險。權重最大。</p></div>
+        <div class="col card"><span class="tag gold">洞數 × −50</span><h3>洞會讓以後更難放</h3><p>洞被上方的方塊蓋住，要先清掉上面才能補。所以每多一個洞，就扣 50 分。</p></div>
+        <div class="col card"><span class="tag gold">落點列號 × 1</span><h3>鼓勵放低，不要太早堆高</h3><p>列號越大代表位置越低。同樣能放的情況下，比較低的位置比較安全。</p></div>
+      </div>
+      <p class="note" style="margin-top:28px;"><strong>權重的大小關係：100 ＞ 50 ＞ 1。</strong>消行的價值，大於避免洞；避免洞的價值，又大於「放低一點」。這些數字是教學用的<strong>手動設定</strong>，不是標準答案。</p>
+    </div>
+  </section>
+
+  <!-- 14 數字例子 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">PART 3｜評分的設計</p>
+    <h2>用數字看分數：消行與洞的影響最大</h2>
+    <p class="lead">以下是兩種<strong>假設的</strong>放法，數字只用來說明計算方式。</p>
+    <div class="body">
+      <div class="row">
+        <div class="col card">
+          <h3>放法 A</h3>
+          <p>落在最下層（row = 19），消 1 行，0 個洞</p>
+          <div class="formula" style="font-size:34px;margin-top:20px;">19 + 100 × 1 − 50 × 0 = <strong>119</strong></div>
+        </div>
+        <div class="col card">
+          <h3>放法 B</h3>
+          <p>落在 row = 17，不消行，2 個洞</p>
+          <div class="formula" style="font-size:34px;margin-top:20px;">17 + 100 × 0 − 50 × 2 = <strong>−83</strong></div>
+        </div>
+      </div>
+      <div class="frag" style="margin-top:34px;">
+        <p class="note" style="font-size:25px;"><strong>A 比 B 高出 202 分。</strong>一行的獎勵，就能蓋過許多「放低」或「少洞」的差異。</p>
+      </div>
+      <div class="frag">
+        <p class="note" style="font-size:25px;background:#fbf3e4;color:#6e5230;"><strong>想一想：</strong>如果另一種放法是 row = 19、不消行、0 個洞，分數是 19。它只比 A 少 100 分——這個差距，你覺得合理嗎？</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 討論 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">PART 3｜先別急著相信它</p>
+    <h2>這樣算，真的最好嗎？</h2>
+    <p class="lead">下面四個問題，請先猜答案，再按一下看解說。</p>
+    <div class="body">
+      <div class="row" style="flex-wrap:wrap;">
+        <div class="col card" style="flex:1 1 48%;">
+          <span class="tag gold">問題 1</span>
+          <h3>水平的 I 與垂直的 I，都落在最底層，分數一樣嗎？</h3>
+          <p class="frag"><strong>不一樣。</strong>列號取的是形狀的<strong>左上角</strong>。水平 I 的 row = 19；垂直 I 有 4 格高，左上角是 row = 16，少了 3 分。</p>
+        </div>
+        <div class="col card" style="flex:1 1 48%;">
+          <span class="tag gold">問題 2</span>
+          <h3>一個盤面很平，一個凹凸很多，只要消行與洞數相同，分數會不同嗎？</h3>
+          <p class="frag"><strong>一樣。</strong>分數完全沒有考慮「高低起伏」，也沒有鼓勵盤面保持平整。</p>
+        </div>
+        <div class="col card" style="flex:1 1 48%;">
+          <span class="tag gold">問題 3</span>
+          <h3>100、50 是怎麼來的？改成 100 與 10 會怎樣？</h3>
+          <p class="frag"><strong>是人手設定的權重。</strong>改了數字，同一盤面就可能選出不同的放法。好不好，要靠實際玩來比較。</p>
+        </div>
+        <div class="col card" style="flex:1 1 48%;">
+          <span class="tag gold">問題 4</span>
+          <h3>程式讀了 NEXT，評分時有用到它嗎？</h3>
+          <p class="frag"><strong>沒有。</strong><code>choose_move</code> 只看目前這一塊；NEXT 只用來安排時序，沒有參與比較。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 圖解 1：水平 I vs 垂直 I -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">圖解 1／4｜對應問題 1</p>
+    <h2>同樣落在最底層，水平 I 與垂直 I 的分數為什麼不同？</h2>
+    <p class="lead">分數的第一項是 <code>row</code>，它記的是形狀<strong>左上角</strong>所在的列，不是形狀的底部。</p>
+    <div class="body">
+      <div class="boards" style="gap:90px;">
+        <div class="bx"><div class="mb" data-size="28" data-labels="14,15,16,17,18,19" data-rows="0000000000/0000000000/0000000000/0000000000/0000000000/0000000000" data-marks="5:0:ghost+cur 5:1:ghost 5:2:ghost 5:3:ghost"></div><div class="lab">水平 I（橫放）</div></div>
+        <div class="bx"><div class="mb" data-size="28" data-labels="14,15,16,17,18,19" data-rows="0000000000/0000000000/0000000000/0000000000/0000000000/0000000000" data-marks="2:0:ghost+cur 3:0:ghost 4:0:ghost 5:0:ghost"></div><div class="lab">垂直 I（直放）</div></div>
+      </div>
+      <p class="cap" style="font-size:22px;">黃色框是形狀的<strong>左上角</strong>；兩個形狀的底部都在第 19 列（地板）。</p>
+      <div class="row" style="justify-content:center;gap:70px;margin-top:22px;">
+        <div class="frag"><div class="formula" style="font-size:30px;padding:14px 26px;">左上角 row = 19<br>分數 = 19 + 0 + 0 = <strong>19</strong></div></div>
+        <div class="frag"><div class="formula" style="font-size:30px;padding:14px 26px;">左上角 row = 16<br>分數 = 16 + 0 + 0 = <strong>16</strong></div></div>
+      </div>
+      <p class="note frag" style="font-size:24px;"><strong>為什麼？</strong>垂直 I 有 4 格高，它的左上角自然比較「高」，所以少了 3 分。分數其實是在衡量<strong>左上角的位置</strong>，而不是方塊實際的高度。</p>
+    </div>
+  </section>
+
+  <!-- 圖解 2：平 vs 凹凸 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">圖解 2／4｜對應問題 2</p>
+    <h2>一個平、一個凹凸：只要消行與洞數相同，分數就一樣</h2>
+    <p class="lead">兩邊都放入同一個 O 形（橘色虛線），落在同一列，沒有消行，也沒有洞。</p>
+    <div class="body">
+      <div class="boards" style="gap:90px;align-items:flex-end;">
+        <div class="bx">
+          <div class="mb" data-size="26" data-rows="0000000000/0000000000/0000000000/0000000000/1111111110/1111111110" data-marks="2:4:ghost 2:5:ghost 3:4:ghost 3:5:ghost"></div>
+          <div class="lab">A：很平</div>
+          <div class="bars" style="margin-top:14px;">
+            <i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:0"></i>
+          </div>
+          <p class="cap">每欄高度：2、2、2、2、2、2、2、2、2、0</p>
+        </div>
+        <div class="bx">
+          <div class="mb" data-size="26" data-rows="0000000000/1000000000/1000000100/1010000100/1010110100/1011110110" data-marks="2:4:ghost 2:5:ghost 3:4:ghost 3:5:ghost"></div>
+          <div class="lab">B：凹凸很多</div>
+          <div class="bars" style="margin-top:14px;">
+            <i style="height:70px"></i><i style="height:0"></i><i style="height:42px"></i><i style="height:14px"></i><i style="height:28px"></i><i style="height:28px"></i><i style="height:0"></i><i style="height:56px"></i><i style="height:14px"></i><i style="height:0"></i>
+          </div>
+          <p class="cap">每欄高度：5、0、3、1、2、2、0、4、1、0</p>
+        </div>
+      </div>
+      <div class="row" style="justify-content:center;gap:70px;margin-top:10px;">
+        <div class="frag" style="text-align:center;"><p style="font-size:22px;color:#5d6f84;margin-bottom:8px;">凹凸度（相鄰欄高度差的總和）= 2</p><div class="formula" style="font-size:30px;padding:12px 24px;">分數 = 16 + 100×0 − 50×0 = <strong>16</strong></div></div>
+        <div class="frag" style="text-align:center;"><p style="font-size:22px;color:#5d6f84;margin-bottom:8px;">凹凸度（相鄰欄高度差的總和）= 21</p><div class="formula" style="font-size:30px;padding:12px 24px;">分數 = 16 + 100×0 − 50×0 = <strong>16</strong></div></div>
+      </div>
+      <p class="note frag" style="font-size:24px;"><strong>公式裡沒有「凹凸度」這一項</strong>，所以分數只看落點列號、消行與洞，完全看不出盤面平不平。</p>
+    </div>
+  </section>
+
+  <!-- 圖解 3：權重 50 vs 10 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">圖解 3／4｜對應問題 3</p>
+    <h2>洞的權重改成 10，同一盤面就會改選另一種放法</h2>
+    <p class="lead">放法 A：J 的長腳伸進井裡，消 1 行，但留下 2 個洞。放法 B：留在井口上方，不消行，也不留洞。</p>
+    <div class="body">
+      <div class="row" style="gap:30px;">
+        <div class="col" style="border-top:5px solid #a862c9;padding-top:14px;">
+          <span class="tag2" style="background:#f3ecf9;color:#7d4aa5;">放法 A（紫色虛線）</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000010001/0000010111/1110011111/1111011111/1111011111" data-marks="1:4:ghost 2:4:ghost 3:3:ghost 3:4:ghost"></div><div class="lab" style="font-size:19px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000000000/0000110001/0000110111/1111011111/1111011111" data-marks="4:4:hole 5:4:hole"></div><div class="lab" style="font-size:19px;">消 1 行，留下 2 個洞（紅色）</div></div>
+          </div>
+        </div>
+        <div class="col" style="border-top:5px solid #2b9db0;padding-top:14px;">
+          <span class="tag2" style="background:#e3f3f6;color:#1f6f7f;">放法 B（藍色虛線）</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000010001/0000010111/1110011111/1111011111/1111011111" data-marks="2:1:ghost2 2:2:ghost2 2:3:ghost2 3:3:ghost2"></div><div class="lab" style="font-size:19px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000010001/0111010111/1111011111/1111011111/1111011111"></div><div class="lab" style="font-size:19px;">不消行，沒有洞</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:26px;">
+        <div class="frag" style="font-size:25px;line-height:1.6;margin-bottom:10px;"><strong>權重 100 : <span class="w50">50</span></strong>（每個洞扣 <span class="w50">50</span>）：A = 15 + 100×1 − <span class="w50">50</span>×2 = <strong>15</strong>；B = 16 + 0 − 0 = <strong>16</strong> → <strong style="color:#2f7a5b;">選 B</strong></div>
+        <div class="frag" style="font-size:25px;line-height:1.6;"><strong>權重 100 : <span class="w10">10</span></strong>（每個洞扣 <span class="w10">10</span>）：A = 15 + 100×1 − <span class="w10">10</span>×2 = <strong>95</strong>；B = 16 → <strong style="color:#7d4aa5;">選 A</strong></div>
+      </div>
+      <p class="note frag" style="font-size:23px;margin-top:18px;">同一盤面、同一塊方塊，只改「洞」的權重，<strong>選擇就翻面</strong>。所以權重不是小事，要用實際的遊戲結果來判斷。</p>
+    </div>
+  </section>
+
+  <!-- 圖解 4：NEXT 的影響 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">圖解 4／4｜對應問題 4</p>
+    <h2>NEXT 沒有進評分，但它會影響下一步能拿多少分</h2>
+    <p class="lead">目前是 J，下一個是 S。只看眼前，會選 18 分的放法；把下一塊 S 也算進去，會選 17 分的放法。</p>
+    <div class="body">
+      <div class="row" style="gap:30px;">
+        <div class="col" style="border-top:5px solid #a862c9;padding-top:14px;">
+          <span class="tag2" style="background:#f3ecf9;color:#7d4aa5;">只看眼前：J 放右邊，18 分</span>
+          <div style="text-align:center;"><div class="mb" data-size="26" data-rows="0000000000/0000010000/0000010000/0010010000/0110010111/0110010111" data-marks="4:7:new 4:8:new 4:9:new 5:9:new 3:3:ghost 4:3:ghost 4:4:ghost 5:4:ghost 5:3:hole"></div></div>
+          <p class="cap" style="font-size:21px;">紫色是 J；虛線是 S 之後能放的<strong>最好</strong>位置。</p>
+          <div class="frag" style="font-size:23px;line-height:1.6;margin-top:10px;">S 只能放在這裡：17 − 50×1 = <strong>−33</strong>（留下 1 個洞）</div>
+          <div class="frag formula" style="font-size:28px;padding:10px 18px;margin-top:10px;">總分 = 18 + (−33) = <strong>−15</strong></div>
+        </div>
+        <div class="col" style="border-top:5px solid #2b9db0;padding-top:14px;">
+          <span class="tag2" style="background:#e3f3f6;color:#1f6f7f;">兩步搜尋：J 放左邊，17 分</span>
+          <div style="text-align:center;"><div class="mb" data-size="26" data-rows="0000000000/0000010000/0000010000/1110010000/1110010000/1110010110" data-marks="3:0:new 3:1:new 4:0:new 5:0:new 3:8:ghost 4:8:ghost 4:9:ghost 5:9:ghost"></div></div>
+          <p class="cap" style="font-size:21px;">紫色是 J；虛線是 S 之後能放的<strong>最好</strong>位置。</p>
+          <div class="frag" style="font-size:23px;line-height:1.6;margin-top:10px;">S 可以放在這裡：17 分，沒有洞</div>
+          <div class="frag formula" style="font-size:28px;padding:10px 18px;margin-top:10px;">總分 = 17 + 17 = <strong>34</strong></div>
+        </div>
+      </div>
+      <p class="note frag" style="font-size:24px;margin-top:20px;"><strong>34 ＞ −15。</strong>有時候「現在少拿 1 分」，能換到「下一步多拿很多分」。這就是往後看一步（兩步搜尋）的價值。</p>
+    </div>
+  </section>
+
+  <!-- 17 比較 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">PART 3｜取捨</p>
+    <h2>幾種計分方式的比較</h2>
+    <p class="lead">沒有哪一組權重永遠最好。重點是知道每個特徵在「管」什麼。</p>
+    <div class="body">
+      <table class="t">
+        <tr><th style="width:22%;">計分方式</th><th style="width:30%;">核心想法</th><th style="width:24%;">優點</th><th>缺點</th></tr>
+        <tr><td><strong>目前的教學版</strong></td><td>列號 + 100 × 消行 − 50 × 洞</td><td>簡單好懂，會消行，也會避免洞</td><td>不看平整度；列號取的是左上角；權重靠手動調整</td></tr>
+        <tr><td><strong>加入平整度</strong></td><td>再扣掉「凹凸度」</td><td>盤面比較平整，比較不容易卡住</td><td>可能為了平整，而放棄能消行的位置</td></tr>
+        <tr><td><strong>經典六特徵</strong></td><td>6 個特徵各自乘上權重，加總</td><td>文獻中常用，能玩得很久</td><td>特徵多，權重不容易調</td></tr>
+        <tr><td><strong>兩步搜尋</strong></td><td>每種放法，再看 NEXT 的最佳放法</td><td>能提早避開死路</td><td>計算量變大（34 × 34 = 1,156 次試算）</td></tr>
+      </table>
+      <p class="note" style="margin-top:26px;">權重要怎麼定？可以<strong>手動調整</strong>、用<strong>搜尋</strong>找，或讓程式<strong>從遊戲中學習</strong>。</p>
+    </div>
+  </section>
+
+  <!-- 18 貪心 vs 搜尋 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">PART 3｜只看眼前，還是往後看一步？</p>
+    <h2>目前的做法是「貪心」：每次只選當下最高分</h2>
+    <p class="lead">貪心很簡單，但它不知道下一塊會是什麼。</p>
+    <div class="body">
+      <div class="row">
+        <div class="col card">
+          <h3>貪心（目前的版本）</h3>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px;">
+            <div class="flowbox" style="font-size:22px;">目前這一塊 A 的所有放法</div>
+            <div class="flowbox" style="font-size:22px;">為每一種放法算分</div>
+            <div class="flowbox" style="font-size:22px;">選分數最高的一種，放下</div>
+          </div>
+        </div>
+        <div class="col card">
+          <h3>兩步搜尋（延伸）</h3>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px;">
+            <div class="flowbox" style="font-size:22px;">A 的每一種放法，模擬放下</div>
+            <div class="flowbox" style="font-size:22px;">對 NEXT 塊 B 的所有放法算分，取最高</div>
+            <div class="flowbox" style="font-size:22px;">總分 = A 的分數 + B 的最高分；選總分最高的 A</div>
+          </div>
+        </div>
+      </div>
+      <div class="frag" style="margin-top:30px;">
+        <p class="note" style="font-size:25px;background:#fbf3e4;color:#6e5230;"><strong>思考題：</strong>程式已經讀到了 <code>next_piece</code>，卻只拿來安排時序。你會怎麼把它放進評分？</p>
+        <p style="margin-top:14px;font-size:23px;color:#44566b;padding-left:6px;">提示：對每一種 A 的放法，先模擬放下，再用<strong>放完之後的盤面</strong>去找 B 的最高分。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 畫面 → 盤面 -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜接上遊戲</p>
+    <h2>從畫面讀盤面：每一格只取中心的一個點</h2>
+    <p class="lead">我們不需要認出方塊的形狀，只要看每一格中心的顏色：接近黑色是空格，否則就是方塊。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:560px;text-align:center;">
+          <div class="shot">
+            <i></i><i></i><i></i><i></i><i></i><i></i>
+            <i></i><i></i><i class="p"></i><i></i><i></i><i></i>
+            <i></i><i class="p"></i><i class="p"></i><i class="p"></i><i></i><i></i>
+            <i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i>
+          </div>
+          <p class="cap">每一格的白點就是取樣的位置。</p>
+        </div>
+        <div class="col">
+          <pre class="code small" style="font-size:22px;"><span class="cm"># 第 row 列、第 col 欄的中心點</span>
+x = 左上x + (col + 0.5) × 格子大小
+y = 左上y + (row + 0.5) × 格子大小
+rgb = image.getpixel((x, y))[:3]
+board[row][col] = 0 if sum(rgb) &lt;= 140 else 1</pre>
+          <div style="margin-top:22px;">
+            <div class="frag" style="font-size:24px;line-height:1.5;color:#33465c;margin-bottom:12px;"><strong>1 量：</strong>盤面左上、右上 → 格子大小 = 距離 ÷ 10</div>
+            <div class="frag" style="font-size:24px;line-height:1.5;color:#33465c;margin-bottom:12px;"><strong>2 定位：</strong>取每一格的中心，避開格線與邊緣</div>
+            <div class="frag" style="font-size:24px;line-height:1.5;color:#33465c;margin-bottom:12px;"><strong>3 取色：</strong>三色加總 ≤ 140 視為黑色（空格）</div>
+            <div class="frag" style="font-size:24px;line-height:1.5;color:#33465c;"><strong>4 轉換：</strong>黑色記為 0，其他記為 1；整個盤面重複 200 次</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20 NEXT -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜接上遊戲</p>
+    <h2>NEXT 是哪一塊？用顏色投票</h2>
+    <p class="lead">七種方塊各有一個代表色。掃描 NEXT 框內的像素，票數最多的顏色，就是下一塊的種類。</p>
+    <div class="body">
+      <div style="display:flex;gap:18px;justify-content:center;">
+        <div class="tile"><img src="ishape.png" alt="I 形">I 形（青色）</div>
+        <div class="tile"><img src="oshape.png" alt="O 形">O 形（黃色）</div>
+        <div class="tile"><img src="lshape.png" alt="L 形">L 形（橘色）</div>
+        <div class="tile"><img src="sshape.png" alt="S 形">S 形（綠色）</div>
+        <div class="tile"><img src="zshape.png" alt="Z 形">Z 形（紅色）</div>
+        <div class="tile"><img src="tshape.png" alt="T 形">T 形（紫色）</div>
+        <div class="tile"><img src="jshape.png" alt="J 形">J 形（藍色）</div>
+      </div>
+      <div style="margin-top:36px;">
+        <div class="frag" style="font-size:25px;line-height:1.6;margin-bottom:12px;">① 每隔一個像素取樣一次，掃過 NEXT 的整個矩形。</div>
+        <div class="frag" style="font-size:25px;line-height:1.6;margin-bottom:12px;">② 每個像素和 7 個參考色比距離；夠接近，就替那個顏色投一票。</div>
+        <div class="frag" style="font-size:25px;line-height:1.6;margin-bottom:12px;">③ <code>winner = max(votes, key=votes.get)</code>：票數最多的顏色就是答案。</div>
+        <div class="frag" style="font-size:25px;line-height:1.6;">④ 票數不到 10 票，回傳 <code>None</code> 並停止。寧可停下，也不要猜。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 send_move -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜接上遊戲</p>
+    <h2>把決定翻成按鍵：先轉、再移、最後落下</h2>
+    <p class="lead">例：T 方塊轉 2 次，放在第 5 欄。<code>START_COLS</code> 記錄每個方向的起始欄位。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:520px;">
+          <div class="card frag" style="margin-bottom:16px;"><h3>① 旋轉</h3><p>按 ↑ 兩次，旋轉到 180°。</p></div>
+          <div class="card frag" style="margin-bottom:16px;"><h3>② 水平移動</h3><p><code>distance = 5 − START_COLS['T'][2] = 5 − 3 = 2</code><br>所以按 → 兩次。</p></div>
+          <div class="card frag"><h3>③ 落下</h3><p>按空白鍵，方塊直接落到底。</p></div>
+        </div>
+        <div class="col">
+          <pre class="code small"><span class="cm"># 先轉、再移、最後落下</span>
+def send_move(piece, turns, col):
+    for _ in range(turns):
+        pyautogui.press("up")            <span class="cm"># 旋轉</span>
+        time.sleep(KEY_DELAY)
+    distance = col - START_COLS[piece][turns]
+    for _ in range(abs(distance)):
+        pyautogui.press("right" if distance &gt; 0 else "left")
+        time.sleep(KEY_DELAY)
+    pyautogui.press("space")             <span class="cm"># 直接落下</span></pre>
+          <p class="note">按鍵之間的 <code>KEY_DELAY</code> 讓遊戲來得及接收。遊戲若有位移或特殊旋轉，結果可能與預期不同，所以要再檢查一次。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充：send_move 圖解（逐步按鍵） -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜接上遊戲｜圖解</p>
+    <h2>送出一步：每按一次鍵，方塊只移動一格或轉一次</h2>
+    <p class="lead">例：T 方塊轉 2 次，要放在第 5 欄。下圖畫的是盤面最下面 6 列；每按一次右鍵，看一個步驟。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:300px 60px 300px 60px 300px 60px 300px;justify-content:center;align-items:center;">
+        <div style="text-align:center;">
+          <div class="mb" data-size="24" data-rows="0000100000/0001110000/0000000000/0000000000/0000000000/1110000000" data-marks="0:4:new 1:3:new 1:4:new 1:5:new"></div>
+          <div style="font-size:20px;font-weight:700;margin-top:12px;">① 出現：0°，左邊界在第 3 欄</div>
+        </div>
+        <div class="arrow frag">→</div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="24" data-rows="0001110000/0000100000/0000000000/0000000000/0000000000/1110000000" data-marks="0:3:new 0:4:new 0:5:new 1:4:new"></div>
+          <div style="font-size:20px;font-weight:700;margin-top:12px;">② ↑ 按 2 次：轉到 180°</div>
+        </div>
+        <div class="arrow frag">→</div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="24" data-rows="0000011100/0000001000/0000000000/0000000000/0000000000/1110000000" data-marks="0:5:new 0:6:new 0:7:new 1:6:new"></div>
+          <div style="font-size:20px;font-weight:700;margin-top:12px;">③ → 按 2 次：移到第 5 欄</div>
+        </div>
+        <div class="arrow frag">→</div>
+        <div class="frag" style="text-align:center;">
+          <div class="mb" data-size="24" data-rows="0000000000/0000000000/0000000000/0000000000/0000011100/1110001000" data-marks="4:5:new 4:6:new 4:7:new 5:6:new"></div>
+          <div style="font-size:20px;font-weight:700;margin-top:12px;">④ 空白鍵：直接落到最底</div>
+        </div>
+      </div>
+      <div class="frag" style="margin-top:36px;text-align:center;">
+        <div class="formula" style="font-size:34px;">distance = 5 − START_COLS['T'][2] = 5 − 3 = <strong>2</strong>　→ 按 → 2 次</div>
+      </div>
+      <p class="note frag" style="margin-top:22px;font-size:23px;">旋轉之後，方塊的寬度會改變，左邊界也跟著不同，所以 <code>START_COLS</code> 要依照轉的次數查表。<br>距離為正就按 →、為負就按 ←，次數都是距離的絕對值。</p>
+    </div>
+  </section>
+
+  <!-- 22 主流程 -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜接上遊戲</p>
+    <h2>主迴圈：讀、算、按、對，再重複</h2>
+    <p class="lead"><code>play()</code> 的骨架只有幾行，但每一步都可能失敗，所以每一步之後都要檢查。</p>
+    <div class="body">
+      <div class="row" style="align-items:stretch;gap:12px;">
+        <div class="flowbox" style="--x:0"><span style="color:#3f9e74;font-size:26px;">1</span><br>放下第一塊<small>先記住 NEXT，再按空白鍵</small></div>
+        <div class="arrow" style="align-self:center;">→</div>
+        <div class="flowbox"><span style="color:#3f9e74;font-size:26px;">2</span><br>讀下一塊<small>read_next()</small></div>
+        <div class="arrow" style="align-self:center;">→</div>
+        <div class="flowbox"><span style="color:#3f9e74;font-size:26px;">3</span><br>試算最佳放法<small>choose_move()</small></div>
+        <div class="arrow" style="align-self:center;">→</div>
+        <div class="flowbox"><span style="color:#3f9e74;font-size:26px;">4</span><br>按鍵執行<small>send_move()</small></div>
+        <div class="arrow" style="align-self:center;">→</div>
+        <div class="flowbox"><span style="color:#3f9e74;font-size:26px;">5</span><br>等待並對帳<small>check_board()</small></div>
+      </div>
+      <div class="row" style="margin-top:40px;">
+        <div class="col card" style="border-left:6px solid #3f9e74;">
+          <h3>一致</h3>
+          <p>更新 <code>board = 試算後的盤面</code>；目前的方塊改成 NEXT，<strong>回到第 2 步</strong>。</p>
+        </div>
+        <div class="col card" style="border-left:6px solid #cf5f57;">
+          <h3>不一致（重拍 2 次仍不同）</h3>
+          <p>印出「試算」與「畫面」兩份盤面，<strong>停止</strong>，請同學檢查座標與按鍵。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 23 對帳 -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜對帳</p>
+    <h2>為什麼要對帳？試算不等於遊戲真的發生</h2>
+    <p class="lead">程式只能「假設」按鍵成功。每次操作後，都要再看一次畫面，確認結果。</p>
+    <div class="body">
+      <div class="row">
+        <div class="col card"><span class="tag">原因 1</span><h3>按鍵沒有被接收</h3><p>遊戲沒有鍵盤焦點、按得太快，或按鍵被忽略。</p></div>
+        <div class="col card"><span class="tag">原因 2</span><h3>動畫還沒結束</h3><p>消行動畫或落地動畫會讓取樣點變色，所以按完先等 <code>SETTLE_DELAY</code> 秒。</p></div>
+        <div class="col card"><span class="tag">原因 3</span><h3>方塊還在上方下落</h3><p>最上面 4 列可能是正在落下的方塊，比對時先忽略（<code>TOP_ROWS_TO_IGNORE</code>）。</p></div>
+      </div>
+      <p class="note frag" style="margin-top:30px;font-size:25px;"><strong>做法：</strong>最多重拍 <code>RETRY_COUNT</code> 次，每次隔 <code>RETRY_DELAY</code> 秒；只要有一次與試算一致，就繼續。<br><strong>設計的想法：</strong>對帳失敗時，程式寧可停下來，也不要在錯誤的盤面上繼續亂按。</p>
+    </div>
+  </section>
+
+  <!-- 24 設定與安全 -->
+  <section class="slide" style="--accent:#3f9e74">
+    <p class="kicker">PART 4｜上場前</p>
+    <h2>量座標、先觀察、再自動玩</h2>
+    <p class="lead">座標要用自己的螢幕量。範例裡的數字只是格式，不能直接拿來用。</p>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col" style="flex:none;width:560px;">
+          <div class="card" style="padding:18px 24px;margin-bottom:14px;"><p style="font-size:23px;"><strong>1.</strong> 開啟遊戲，固定視窗的位置、大小與縮放比例。</p></div>
+          <div class="card" style="padding:18px 24px;margin-bottom:14px;"><p style="font-size:23px;"><strong>2.</strong> 執行 <code>capture_coordinates.py</code>，量出盤面的左上、右上，以及 NEXT 的左上、右下。</p></div>
+          <div class="card" style="padding:18px 24px;margin-bottom:14px;"><p style="font-size:23px;"><strong>3.</strong> 把座標填進 <code>tetris_bot_simple.py</code> 開頭的設定。</p></div>
+          <div class="card" style="padding:18px 24px;margin-bottom:14px;"><p style="font-size:23px;"><strong>4.</strong> 執行 <code>--check</code>：只看、不按鍵，確認盤面與 NEXT 正確。</p></div>
+          <div class="card" style="padding:18px 24px;"><p style="font-size:23px;"><strong>5.</strong> 執行 <code>--play</code>：切回遊戲，等待 5 秒後開始。</p></div>
+        </div>
+        <div class="col">
+          <pre class="code small"><span class="cm"># 只試算範例盤面，不讀畫面、不按鍵</span>
+uv run --python 3.12 "tetris bot/tetris_bot_simple.py"
+
+<span class="cm"># 只看畫面，不按鍵（先做這一步）</span>
+uv run --python 3.12 "tetris bot/tetris_bot_simple.py" --check
+
+<span class="cm"># 自動遊玩</span>
+uv run --python 3.12 "tetris bot/tetris_bot_simple.py" --play</pre>
+          <div class="card" style="margin-top:22px;border-left:6px solid #cf5f57;">
+            <h3 style="font-size:26px;">緊急停止</h3>
+            <p>把滑鼠快速移到螢幕左上角（PyAutoGUI 的 FailSafe），或在終端機按 Ctrl + C。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 25 影片示範 -->
+  <section class="slide" style="--accent:#cf5f57">
+    <p class="kicker">PART 5｜示範</p>
+    <h2>實際執行：從第 40 秒開始看 bot 玩</h2>
+    <p class="lead">影片中的操作，和前面的流程一致：看畫面 → 試算 → 按鍵 → 對帳。</p>
+    <div class="body" style="text-align:center;">
+      <video src="2026-11-15%2020%2021%2020.mp4#t=40" controls preload="metadata" style="max-height:580px;max-width:100%;border-radius:16px;background:#000;"></video>
+      <p class="cap">影片位於同一資料夾，從 0:40 開始播放。</p>
+    </div>
+  </section>
+
+  <!-- 26 練習 -->
+  <section class="slide" style="--accent:#cf5f57">
+    <p class="kicker">PART 5｜課堂練習</p>
+    <h2>動手改一改：看分數怎麼影響選擇</h2>
+    <p class="lead">每一題都可以用 <code>choose_move</code> 的範例盤面，比較改前與改後的結果。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+        <div class="card" style="padding:22px 24px;"><span class="tag">練習 1</span><h3 style="font-size:26px;">改權重</h3><p style="font-size:21px;">把 50 改成 10，或把 100 改成 200。同一個盤面，選的放法會改變嗎？</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag">練習 2</span><h3 style="font-size:26px;">加入凹凸度</h3><p style="font-size:21px;">計算相鄰兩欄高度差的總和，從分數中扣除。</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag">練習 3</span><h3 style="font-size:26px;">改用落點底部</h3><p style="font-size:21px;">不用左上角的 row，改用方塊最底下的那一列。垂直 I 還會少 3 分嗎？</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag">練習 4</span><h3 style="font-size:26px;">往後看一步</h3><p style="font-size:21px;">對每一種 T 的放法，再試 NEXT 的所有放法，取「總分最高」的那一組。</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag">練習 5</span><h3 style="font-size:26px;">找反例</h3><p style="font-size:21px;">找出一個你覺得「不合理」的放法，說明它為什麼得到高分或低分。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 27 總結 -->
+  <section class="slide" style="--accent:#253c5a">
+    <p class="kicker">總結</p>
+    <h2>三個思考方式，比程式本身更重要</h2>
+    <div class="body">
+      <div class="row">
+        <div class="col card"><div class="num">1</div><h3>表示：把看到的東西，變成資料</h3><p>盤面是二維串列，形狀是矩陣，旋轉只是換位置。</p></div>
+        <div class="col card"><div class="num">2</div><h3>拆解：大問題，拆成小問題</h3><p>放得下嗎？會落在哪？消行與洞？怎麼按？做完對帳嗎？</p></div>
+        <div class="col card"><div class="num">3</div><h3>計算：試遍、比較、選擇</h3><p>每一步都是清楚的規則。規則不完美，就改規則，再試一次。</p></div>
+      </div>
+      <p style="margin-top:56px;font-size:38px;font-weight:900;line-height:1.5;color:#253c5a;">電腦不「懂」Tetris，<br>它只是把我們的判斷，寫得夠清楚而已。</p>
+    </div>
+  </section>
+
+  <!-- 28 延伸資源 -->
+  <section class="slide" style="--accent:#253c5a">
+    <p class="kicker">延伸閱讀</p>
+    <h2>課後可以打開的資料</h2>
+    <div class="body">
+      <div class="row" style="align-items:flex-start;">
+        <div class="col card links">
+          <h3 style="margin-bottom:12px;">互動教室（同一資料夾）</h3>
+          <a href="方塊資料結構.html" target="_blank">方塊資料結構</a>
+          <a href="fits%20放得下嗎.html" target="_blank">fits：這個位置放得下嗎？</a>
+          <a href="drop_row%20方塊會落在哪裡.html" target="_blank">drop_row：方塊會落在哪裡？</a>
+          <a href="place_and_clear%20放置與消行.html" target="_blank">place_and_clear：放置與消行</a>
+          <a href="count_holes%20計算洞.html" target="_blank">count_holes：怎麼計算洞？</a>
+          <a href="choose_move%20選擇最佳放法.html" target="_blank">choose_move：如何選擇最佳放法？</a>
+        </div>
+        <div class="col card links">
+          <h3 style="margin-bottom:12px;">程式與設計原理</h3>
+          <a href="tetris_bot_simple.py" target="_blank">tetris_bot_simple.py<br><code>教學用的完整程式</code></a>
+          <a href="Tetris%20bot%20設計原理.md" target="_blank">Tetris bot 設計原理<br><code>想法、設定與課堂討論題</code></a>
+          <a href="capture_coordinates.py" target="_blank">capture_coordinates.py<br><code>量測螢幕座標</code></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充：評分特徵（3 個，移到最後面） -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">補充素材｜評分特徵</p>
+    <h2>評分可以看的特徵，除了洞與消行，還有很多</h2>
+    <p class="lead">先介紹其中 3 個，其餘的請同學自己發想。</p>
+    <div class="body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+        <div class="card" style="padding:22px 24px;"><span class="tag">越小越好</span><h3>總高度 <small style="font-size:18px;color:#7b8a9b;">Aggregate height</small></h3><p>每一欄最高方塊的高度，全部加總。放在不平的地方，總高度會增加得更多。</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag">越小越好</span><h3>凹凸度 <small style="font-size:18px;color:#7b8a9b;">Bumpiness</small></h3><p>相鄰兩欄高度差的總和。盤面越平整，數字越小。</p></div>
+        <div class="card" style="padding:22px 24px;"><span class="tag gold">經典</span><h3>井 <small style="font-size:18px;color:#7b8a9b;">Wells</small></h3><p>兩側都比較高的窄坑。4 格深的井，直放的 I 可以一次消 4 行；但若被 O 蓋住，就變成 4 個洞。</p></div>
+      </div>
+      <div class="card" style="margin-top:28px;border-style:dashed;background:#fbfbf8;padding:22px 26px;">
+        <h3 style="font-size:26px;">其餘 6 個特徵，請同學發想</h3>
+        <p>例如：行轉換、欄轉換、落點高度、消去的方塊格數。提示：先想一想「好的盤面」長什麼樣子，再把它變成數字。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 補充特徵 1：總高度 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <style>
+      .stkwrap { display:flex; gap:12px; align-items:flex-end; height:100px; padding:0 10px; border-bottom:3px solid #9aa8b6; width:max-content; margin:0 auto; }
+      .stk { display:flex; flex-direction:column-reverse; width:40px; }
+      .stk i { display:block; width:40px; }
+      .stk .base { background:#9aabbb; }
+      .stk .inc { background:#a862c9; border-radius:5px 5px 0 0; }
+      .bars2 { position:relative; width:492px; height:110px; margin:0 auto; border-bottom:3px solid #9aa8b6; }
+      .bars2 i { position:absolute; bottom:0; width:40px; background:#70869f; border-radius:5px 5px 0 0; }
+      .dl { position:relative; width:492px; height:46px; margin:8px auto 0; }
+      .dl span { position:absolute; top:0; width:40px; text-align:center; font:700 22px/1.6 Consolas,monospace; color:#7d4aa5; background:#f3ecf9; border-radius:8px; }
+    </style>
+    <p class="kicker">補充素材｜特徵 1：總高度</p>
+    <h2>同樣放一根橫的 I：平地與凹凸處，總高度增加的量不同</h2>
+    <p class="lead">總高度 = 每一欄最高方塊的高度加總。下方柱狀圖：灰色是原本的高度，紫色是放入後新增的高度。</p>
+    <div class="body">
+      <div class="row" style="gap:30px;">
+        <div class="col" style="border-top:5px solid #70869f;padding-top:14px;">
+          <span class="tag2" style="background:#eef3f6;color:#44566b;">平地：前 4 欄都是高 3</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="22" data-rows="0000000000/0000000000/0000000000/1111000000/1111000000/1111000000" data-marks="2:0:ghost 2:1:ghost 2:2:ghost 2:3:ghost"></div><div class="lab" style="font-size:18px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="22" data-rows="0000000000/0000000000/1111000000/1111000000/1111000000/1111000000"></div><div class="lab" style="font-size:18px;">放入後</div></div>
+          </div>
+          <div class="stkwrap" style="margin-top:8px;">
+            <div class="stk"><i class="base" style="height:54px"></i><i class="inc" style="height:18px"></i></div>
+            <div class="stk"><i class="base" style="height:54px"></i><i class="inc" style="height:18px"></i></div>
+            <div class="stk"><i class="base" style="height:54px"></i><i class="inc" style="height:18px"></i></div>
+            <div class="stk"><i class="base" style="height:54px"></i><i class="inc" style="height:18px"></i></div>
+          </div>
+          <div class="frag" style="margin-top:16px;"><div class="formula" style="font-size:28px;padding:10px 18px;">總高度 12 → 16，<strong>增加 4</strong></div></div>
+        </div>
+        <div class="col" style="border-top:5px solid #cf5f57;padding-top:14px;">
+          <span class="tag2" style="background:#fde7e4;color:#a4483f;">凹凸處：高度 3、1、2、0</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="22" data-rows="0000000000/0000000000/0000000000/1000000000/1010000000/1110000000" data-marks="2:0:ghost 2:1:ghost 2:2:ghost 2:3:ghost"></div><div class="lab" style="font-size:18px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="22" data-rows="0000000000/0000000000/1111000000/1000000000/1010000000/1110000000" data-marks="3:1:hole 4:1:hole 3:2:hole 3:3:hole 4:3:hole 5:3:hole"></div><div class="lab" style="font-size:18px;">放入後（紅色是洞）</div></div>
+          </div>
+          <div class="stkwrap" style="margin-top:8px;">
+            <div class="stk"><i class="base" style="height:54px"></i><i class="inc" style="height:18px"></i></div>
+            <div class="stk"><i class="base" style="height:18px"></i><i class="inc" style="height:54px"></i></div>
+            <div class="stk"><i class="base" style="height:36px"></i><i class="inc" style="height:36px"></i></div>
+            <div class="stk"><i class="base" style="height:0px"></i><i class="inc" style="height:72px"></i></div>
+          </div>
+          <div class="frag" style="margin-top:16px;"><div class="formula" style="font-size:28px;padding:10px 18px;">總高度 6 → 16，<strong>增加 10</strong></div></div>
+        </div>
+      </div>
+      <p class="note frag" style="font-size:24px;margin-top:20px;"><strong>同樣放 4 格，總高度增加的量不同。</strong>放在凹凸處，還會留下洞。所以「總高度」這個特徵，會讓 bot 偏好平地。</p>
+    </div>
+  </section>
+
+  <!-- 補充特徵 2：凹凸度 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">補充素材｜特徵 2：凹凸度</p>
+    <h2>凹凸度 = 相鄰兩欄高度差的總和</h2>
+    <p class="lead">把每一對相鄰欄的高度相減、取絕對值，再全部加起來。差越大，盤面越不平整。</p>
+    <div class="body">
+      <div class="row" style="gap:30px;">
+        <div class="col" style="border-top:5px solid #cf5f57;padding-top:14px;">
+          <span class="tag2" style="background:#fde7e4;color:#a4483f;">凹凸很多的盤面</span>
+          <div class="bars2" style="margin-top:10px;">
+            <i style="left:10px;height:90px"></i><i style="left:58px;height:0px"></i><i style="left:106px;height:54px"></i><i style="left:154px;height:18px"></i><i style="left:202px;height:36px"></i><i style="left:250px;height:36px"></i><i style="left:298px;height:0px"></i><i style="left:346px;height:72px"></i><i style="left:394px;height:18px"></i><i style="left:442px;height:0px"></i>
+          </div>
+          <div class="dl">
+            <span style="left:34px">5</span><span style="left:82px">3</span><span style="left:130px">2</span><span style="left:178px">1</span><span style="left:226px">0</span><span style="left:274px">2</span><span style="left:322px">4</span><span style="left:370px">3</span><span style="left:418px">1</span>
+          </div>
+          <div class="frag" style="margin-top:16px;"><div class="formula" style="font-size:28px;padding:10px 18px;">凹凸度 = 5+3+2+1+0+2+4+3+1 = <strong>21</strong></div></div>
+        </div>
+        <div class="col" style="border-top:5px solid #2b9db0;padding-top:14px;">
+          <span class="tag2" style="background:#e3f3f6;color:#1f6f7f;">很平的盤面</span>
+          <div class="bars2" style="margin-top:10px;">
+            <i style="left:10px;height:36px"></i><i style="left:58px;height:36px"></i><i style="left:106px;height:36px"></i><i style="left:154px;height:36px"></i><i style="left:202px;height:36px"></i><i style="left:250px;height:36px"></i><i style="left:298px;height:36px"></i><i style="left:346px;height:36px"></i><i style="left:394px;height:36px"></i><i style="left:442px;height:0px"></i>
+          </div>
+          <div class="dl">
+            <span style="left:34px">0</span><span style="left:82px">0</span><span style="left:130px">0</span><span style="left:178px">0</span><span style="left:226px">0</span><span style="left:274px">0</span><span style="left:322px">0</span><span style="left:370px">0</span><span style="left:418px">2</span>
+          </div>
+          <div class="frag" style="margin-top:16px;"><div class="formula" style="font-size:28px;padding:10px 18px;">凹凸度 = 0+0+0+0+0+0+0+0+2 = <strong>2</strong></div></div>
+        </div>
+      </div>
+      <p class="note frag" style="font-size:23px;margin-top:10px;">數字下方的紫色格子是「相鄰兩欄的差」。凹凸度越小，盤面越平整；它可以當作額外的扣分項目。</p>
+    </div>
+  </section>
+
+  <!-- 補充特徵 3：井 -->
+  <section class="slide" style="--accent:#d18a1f">
+    <p class="kicker">補充素材｜特徵 3：井</p>
+    <h2>井：4 格深的窄坑，適合放直的 I，怕被蓋住</h2>
+    <p class="lead">井是兩側都比較高的窄坑。直放的 I 正好填滿它；換成 O 蓋在上面，井就變成洞。</p>
+    <div class="body">
+      <div class="row" style="gap:30px;">
+        <div class="col" style="border-top:5px solid #3f9e74;padding-top:14px;">
+          <span class="tag2" style="background:#e7f6ee;color:#2f7a5b;">直放的 I 填進井裡</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000000000/1111011111/1111011111/1111011111/1111011111" data-marks="2:4:ghost 3:4:ghost 4:4:ghost 5:4:ghost"></div><div class="lab" style="font-size:19px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000000000/0000000000/0000000000/0000000000/0000000000"></div><div class="lab" style="font-size:19px;">4 行全部消掉</div></div>
+          </div>
+          <div class="frag" style="margin-top:18px;"><div class="formula" style="font-size:28px;padding:10px 18px;">分數 = 16 + 4×100 − 50×0 = <strong>416</strong></div></div>
+        </div>
+        <div class="col" style="border-top:5px solid #cf5f57;padding-top:14px;">
+          <span class="tag2" style="background:#fde7e4;color:#a4483f;">O 蓋在井口上</span>
+          <div class="boards" style="gap:16px;align-items:center;">
+            <div class="bx"><div class="mb" data-size="24" data-rows="0000000000/0000000000/1111011111/1111011111/1111011111/1111011111" data-marks="0:3:ghost 0:4:ghost 1:3:ghost 1:4:ghost"></div><div class="lab" style="font-size:19px;">放入前</div></div>
+            <div class="arrow">→</div>
+            <div class="bx"><div class="mb" data-size="24" data-rows="0001100000/0001100000/1111011111/1111011111/1111011111/1111011111" data-marks="2:4:hole 3:4:hole 4:4:hole 5:4:hole"></div><div class="lab" style="font-size:19px;">井變成洞（紅色）</div></div>
+          </div>
+          <div class="frag" style="margin-top:18px;"><div class="formula" style="font-size:28px;padding:10px 18px;">分數 = 14 + 0 − 50×4 = <strong>−186</strong></div></div>
+        </div>
+      </div>
+      <p class="note frag" style="font-size:24px;margin-top:20px;">井的深度，就是它帶來的<strong>風險與機會</strong>：適合放的時候可以一次消很多行；若被蓋住，就會留下很多洞。</p>
+    </div>
+  </section>
+
+  <div class="hint">← → 換頁　·　F 全螢幕　·　也可以點畫面換頁</div>
+  <div class="pager" id="pager"></div>
+  <div class="progress" id="progress"></div>
+</div>
+
+<script>
+(function () {
+  const stage = document.getElementById('stage');
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const pager = document.getElementById('pager');
+  const bar = document.getElementById('progress');
+  let cur = 0;
+
+  // 依視窗大小等比縮放 1600 × 900 的舞台
+  function fit() {
+    const s = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // 把 data-rows 轉成小型盤面
+  document.querySelectorAll('.mb').forEach(function (el) {
+    const rows = el.dataset.rows.split('/');
+    const size = parseInt(el.dataset.size || '36', 10);
+    const marks = {};
+    (el.dataset.marks || '').split(/\s+/).filter(Boolean).forEach(function (m) {
+      const p = m.split(':');
+      marks[p[0] + ',' + p[1]] = p[2];
+    });
+    el.style.gridTemplateColumns = 'repeat(' + rows[0].length + ', ' + size + 'px)';
+    el.style.gridAutoRows = size + 'px';
+    rows.forEach(function (line, r) {
+      for (let c = 0; c < line.length; c++) {
+        const mark = marks[r + ',' + c] || '';
+        const d = document.createElement('span');
+        // 標記可用 + 合併多個樣式，例如 ghost+cur
+        d.className = 'cell' + (line[c] === '1' ? ' on' : '') + (mark ? ' ' + mark.split('+').join(' ') : '');
+        // 預計放入的格子（ghost）顯示為 1
+        d.textContent = mark.indexOf('ghost') >= 0 ? '1' : line[c];
+        d.style.width = size + 'px';
+        d.style.height = size + 'px';
+        d.style.fontSize = Math.round(size * 0.4) + 'px';
+        el.appendChild(d);
+      }
+    });
+  });
+
+  // data-labels：在盤面左側加上列號
+  document.querySelectorAll('.mb[data-labels]').forEach(function (el) {
+    const size = parseInt(el.dataset.size || '36', 10);
+    const wrap = document.createElement('div');
+    wrap.className = 'mbw';
+    const lab = document.createElement('div');
+    lab.className = 'rl';
+    el.dataset.labels.split(',').forEach(function (t) {
+      const s = document.createElement('span');
+      s.textContent = t;
+      s.style.height = size + 'px';
+      s.style.lineHeight = size + 'px';
+      lab.appendChild(s);
+    });
+    el.parentNode.insertBefore(wrap, el);
+    wrap.append(lab, el);
+  });
+
+  function show(i, fromBack) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, k) { s.classList.toggle('active', k === cur); });
+    // 逐步出現的元素：往前翻時從隱藏開始，往回翻時全部顯示
+    slides[cur].querySelectorAll('.frag').forEach(function (f) { f.classList.toggle('on', !!fromBack); });
+    pager.textContent = (cur + 1) + ' / ' + slides.length;
+    bar.style.width = ((cur + 1) / slides.length * 100) + '%';
+    const accent = slides[cur].style.getPropertyValue('--accent');
+    bar.style.background = accent || '#a862c9';
+    try { history.replaceState(null, '', '#' + (cur + 1)); } catch (e) {}
+  }
+
+  function next() {
+    const hidden = slides[cur].querySelector('.frag:not(.on)');
+    if (hidden) hidden.classList.add('on');
+    else show(cur + 1, false);
+  }
+
+  function prev() {
+    const shown = slides[cur].querySelectorAll('.frag.on');
+    if (shown.length) shown[shown.length - 1].classList.remove('on');
+    else show(cur - 1, true);
+  }
+
+  function toggleFull() {
+    try {
+      if (!document.fullscreenElement) {
+        const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+        if (p && p.catch) p.catch(function () {});
+      } else {
+        const p = document.exitFullscreen && document.exitFullscreen();
+        if (p && p.catch) p.catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target && e.target.closest && e.target.closest('video') && e.key === ' ') return;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'Home':
+        show(0, false); break;
+      case 'End':
+        show(slides.length - 1, true); break;
+      case 'f': case 'F':
+        toggleFull(); break;
+    }
+  });
+
+  stage.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('a, video')) return;
+    next();
+  });
+
+  const start = parseInt(location.hash.slice(1), 10);
+  show(isNaN(start) ? 0 : start - 1, false);
+})();
+</script>
+</body>
+</html>

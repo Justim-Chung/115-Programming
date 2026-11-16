@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>count_holes：怎麼計算洞？｜Tetris Bot 教學</title>
+  <style>
+    :root { --ink:#1b2c44; --muted:#62768c; --line:#e0e8ec; --sq:25px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f7f3; color:var(--ink); font-family:"Microsoft JhengHei",system-ui,sans-serif; }
+    button { font:inherit; cursor:pointer; }
+    button:focus-visible { outline:3px solid #2778df; outline-offset:2px; }
+    .wrap { max-width:1380px; margin:auto; padding:20px 32px 28px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:15px; border-bottom:1px solid #dfe5e5; padding-bottom:14px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; letter-spacing:.08em; }
+    .mark { width:25px; height:25px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; transform:rotate(-7deg); }
+    .mark i { background:#263c5c; border-radius:3px; }.mark i:nth-child(2){background:#b87ee3}.mark i:nth-child(3){background:#76cfd1}
+    .chapter { color:#8795a5; font-size:14px; font-weight:700; letter-spacing:.12em; }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:20px 0 16px; }
+    .eyebrow { color:#c28b52; font-size:13px; font-weight:800; letter-spacing:.15em; margin:0 0 6px; }
+    h1 { font-size:clamp(28px,3vw,39px); line-height:1.2; letter-spacing:-.03em; margin:0; }
+    h1 code { color:#b07839; font-family:Consolas,monospace; }
+    .intro p:last-child { color:var(--muted); font-size:17px; margin:8px 0 0; line-height:1.6; }
+    .badge { font-size:14px; color:#8495a5; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:420px minmax(0,1fr); gap:14px; align-items:start; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:17px; overflow:hidden; }
+    .board-panel { padding:16px 18px 15px; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .heading { font-size:17px; font-weight:800; }.label { color:#92a1b0; font:700 12px Consolas,monospace; letter-spacing:.1em; }
+    .board-hint { margin:6px 0 9px; color:#66788d; font-size:15px; line-height:1.5; }
+    .board-scroll { overflow:auto; }
+    .board { display:grid; grid-template-columns:25px repeat(10,var(--sq)); grid-auto-rows:var(--sq); gap:2px; width:max-content; }
+    .axis { display:grid; place-items:center; font:12px Consolas,monospace; color:#748599; }
+    .axis.current-col { color:#af7933; font-weight:800; }
+    .cell { display:grid; place-items:center; width:var(--sq); height:var(--sq); padding:0; border:1px solid #e6edf0; border-radius:3px; background:#f2f5f7; color:#a4b0bc; font:700 12px Consolas,monospace; position:relative; }
+    .cell:hover { z-index:2; outline:2px solid #8bb6c8; }
+    .cell.in-column:not(.filled):not(.hole) { background:#fff6e6; }
+    .cell.filled { background:#70869f; border-color:#70869f; color:white; box-shadow:inset 0 -3px #00000019; }
+    .cell.hole { background:#efb1a3; border-color:#e18b7a; color:#713c35; }
+    .cell.current { outline:3px solid #e2a13e; outline-offset:-1px; z-index:2; }
+    .legend { display:flex; gap:10px 15px; flex-wrap:wrap; margin-top:10px; font-size:14px; line-height:1.5; color:#64798c; }
+    .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:#70869f; }
+    .swatch.hole { background:#efb1a3; }.swatch.current { background:#ffecb9; border:2px solid #e2a13e; }
+    .right { display:grid; gap:12px; min-width:0; }
+    .definition { padding:15px 18px; display:flex; gap:14px; align-items:flex-start; background:#fff9ec; border-color:#f2e4c8; }
+    .definition .icon { background:#f4e2ba; color:#8f6a2e; border-radius:8px; padding:5px 9px; font-size:13px; font-weight:800; flex:none; }
+    .definition p { margin:0; color:#6f604d; font-size:15px; line-height:1.7; }.definition strong { color:#574633; }
+    .content { display:grid; grid-template-columns:minmax(260px,1fr) minmax(290px,1fr); gap:12px; }
+    .detail { padding:16px 18px; }
+    .stats { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .pill { display:inline-block; background:#f1f4f7; color:#526b83; padding:8px 10px; font:700 15px Consolas,monospace; border-radius:7px; }
+    .pill.count { background:#fbe9e3; color:#a45648; }
+    .explain { margin-top:12px; min-height:154px; border-radius:10px; background:#f5f8fa; padding:13px; color:#5c7083; font-size:16px; line-height:1.7; }
+    .explain strong { color:#243d55; }.explain.hole { background:#fff1ed; color:#915448; }.explain.done { background:#edf8f1; color:#42795c; }
+    .formula { display:block; margin-top:7px; color:#31526b; font:700 14px/1.7 Consolas,monospace; overflow-wrap:anywhere; }
+    .step-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .btn { min-height:40px; border:1px solid #dce5e9; border-radius:8px; background:#fff; color:#465b71; padding:6px 12px; font-size:15px; font-weight:700; }
+    .btn:hover:not(:disabled) { background:#f2f5f7; }.btn.primary { color:#fff; background:#253c5a; border-color:#253c5a; }.btn.primary:hover:not(:disabled) { background:#385271; }
+    .btn:disabled { cursor:default; opacity:.45; }
+    .counter { margin-top:10px; color:#74879a; font-size:14px; line-height:1.5; }
+    .code-panel { background:#19263a; color:#e6edf5; border-color:#19263a; padding:16px 18px; }
+    .code-panel .label { color:#879ab1; }
+    .code { margin:14px -6px 0; font:15px/1.8 Consolas,"Courier New",monospace; white-space:pre; overflow:auto; }
+    .line { display:block; padding:0 6px; border-left:3px solid transparent; color:#bdcbd9; }
+    .line.active { background:#ffffff15; border-left-color:#e8b566; color:#fff; }
+    .code-foot { margin-top:12px; border-top:1px solid #35445b; padding-top:10px; color:#b4c3d3; font-size:14px; line-height:1.6; }
+    .note { display:flex; gap:10px; padding:11px 14px; background:#edf3f4; border-radius:10px; font-size:15px; color:#586f82; line-height:1.6; }
+    .note strong { color:#364e61; flex:none; }
+    @media (min-width:951px) and (max-width:1220px) { .content { grid-template-columns:1fr; } }
+    @media(max-width:950px) { .layout { grid-template-columns:1fr; } }
+    @media(max-width:620px) { .wrap { padding:16px 14px; } .intro .badge { display:none; } .content { grid-template-columns:1fr; } :root { --sq:24px; } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>TETRIS BOT <span style="color:#aab4be;font-weight:400">/</span> 程式設計課</div><span class="chapter">互動教室　05</span></header>
+  <div class="intro"><div><p class="eyebrow">FROM BOARD TO HOLE COUNT</p><h1><code>count_holes()</code>：盤面有多少個洞？</h1><p>讓電腦逐欄往下看，算出有多少空格被上方的方塊蓋住。</p></div><span class="badge">逐欄掃描　→　記住方塊　→　累計空格</span></div>
+  <div class="layout">
+    <section class="panel board-panel" aria-label="互動盤面">
+      <div class="panel-head"><span class="heading">模擬盤面</span><span class="label">BOARD · 20 × 10</span></div>
+      <p class="board-hint">範例是先放下橫向 I，再放下旋轉 180° 的 L。點任一格可增加或移除方塊；修改後會重新計數。</p>
+      <div class="board-scroll"><div class="board" id="board" aria-label="20 列 10 欄盤面"></div></div>
+      <div class="legend"><span><i class="swatch"></i>方塊（1）</span><span><i class="swatch hole"></i>已發現的洞（0）</span><span><i class="swatch current"></i>正在檢查</span></div>
+    </section>
+    <div class="right">
+      <section class="panel definition" aria-label="洞的定義"><span class="icon">定義</span><p>在<strong>同一欄</strong>中，某個空格的<strong>上方有至少一個方塊</strong>，就算一個洞。上方沒有方塊的空格，不算洞。</p></section>
+      <div class="content">
+        <section class="panel detail" aria-label="逐格檢查過程">
+          <div class="panel-head"><span class="heading">從上往下掃描</span><span class="label">STEP BY STEP</span></div>
+          <div class="stats"><span id="position" class="pill"></span><span id="covered" class="pill"></span><span id="count" class="pill count"></span></div>
+          <div id="explain" class="explain" aria-live="polite"></div>
+          <div class="step-actions"><button type="button" id="next" class="btn primary">下一格 →</button><button type="button" id="next-column" class="btn">快轉一欄</button><button type="button" id="finish" class="btn">看最終結果</button><button type="button" id="restart" class="btn">重新掃描</button><button type="button" id="example" class="btn">回到範例盤面</button></div>
+          <div id="progress" class="counter"></div>
+        </section>
+        <section class="panel code-panel" aria-label="Python 程式碼">
+          <div class="panel-head"><span class="heading">對照 Python 程式</span><span class="label">COUNT_HOLES</span></div>
+          <div class="code" id="code"><span class="line" data-line="def">def count_holes(board):</span><span class="line" data-line="init">    holes = 0</span><span class="line" data-line="column">    for col in range(COLS):</span><span class="line" data-line="column">        covered = False</span><span class="line" data-line="scan">        for row in range(ROWS):</span><span class="line" data-line="block">            if board[row][col]:</span><span class="line" data-line="block">                covered = True</span><span class="line" data-line="hole">            elif covered:</span><span class="line" data-line="hole">                holes += 1</span><span class="line" data-line="return">    return holes</span></div>
+          <div class="code-foot">換到新的一欄時，<code>covered</code> 會重新設為 <code>False</code>；洞的總數則繼續累計。</div>
+        </section>
+      </div>
+      <div class="note"><strong>記住</strong><span>這裡的「洞」依照程式的<strong>同欄上方是否有方塊</strong>來定義，並沒有另外搜尋空格能否從側面抵達。<code>count_holes()</code> 回傳的是洞的數量，不會修改盤面。</span></div>
+    </div>
+  </div>
+</main>
+<script>
+  const ROWS = 20, COLS = 10;
+  function exampleBoard() {
+    const result = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+    result[17] = [0,0,0,1,1,1,0,0,0,0];
+    result[18] = [0,0,0,1,0,0,0,0,0,0];
+    result[19] = [1,1,1,1,0,0,0,0,0,0];
+    return result;
+  }
+  let board = exampleBoard(), processed = 0;
+
+  // 依照 Python 的順序，記下每一格被檢查後的狀態。
+  function scanBoard(input) {
+    const events = [];
+    let holes = 0;
+    for (let col = 0; col < COLS; col++) {
+      let covered = false;
+      for (let row = 0; row < ROWS; row++) {
+        const value = input[row][col];
+        let kind = 'empty';
+        if (value) { covered = true; kind = 'block'; }
+        else if (covered) { holes++; kind = 'hole'; }
+        events.push({row,col,value,covered,kind,holes});
+      }
+    }
+    return events;
+  }
+  function resetScan() { processed = 0; render(); }
+  function render() {
+    const events = scanBoard(board), current = processed ? events[processed-1] : null;
+    const done = processed === events.length;
+    const holes = current ? current.holes : 0;
+    const activeColumn = current ? current.col : 0;
+    const foundHoles = new Set(events.slice(0,processed).filter(event => event.kind === 'hole').map(event => `${event.row},${event.col}`));
+    const grid = document.getElementById('board'); grid.replaceChildren();
+    for (let row = -1; row < ROWS; row++) for (let col = -1; col < COLS; col++) {
+      if (row === -1 || col === -1) {
+        const el = document.createElement('span');
+        el.className = 'axis' + (row === -1 && col === activeColumn && !done ? ' current-col' : '');
+        el.textContent = row === -1 && col >= 0 ? col : (col === -1 && row >= 0 ? row : '');
+        grid.append(el); continue;
+      }
+      const el = document.createElement('button'); el.type = 'button';
+      const isHole = foundHoles.has(`${row},${col}`);
+      el.className = 'cell' + (col === activeColumn && !done ? ' in-column' : '') + (board[row][col] ? ' filled' : '') + (isHole ? ' hole' : '') + (current && current.row === row && current.col === col && !done ? ' current' : '');
+      el.textContent = board[row][col];
+      el.setAttribute('aria-label', `第 ${row} 列第 ${col} 欄，目前${board[row][col] ? '有方塊' : '是空格'}；點選可切換`);
+      el.addEventListener('click', () => { board[row][col] = board[row][col] ? 0 : 1; resetScan(); });
+      grid.append(el);
+    }
+    document.getElementById('position').textContent = current ? `row = ${current.row}, col = ${current.col}` : '從 col = 0 開始';
+    document.getElementById('covered').textContent = `covered = ${current && current.covered ? 'True' : 'False'}`;
+    document.getElementById('count').textContent = `holes = ${holes}`;
+    document.getElementById('progress').textContent = `已檢查 ${processed} / ${events.length} 格；顏色只標示已檢查出的洞。`;
+    ['next','next-column','finish'].forEach(id => { document.getElementById(id).disabled = done; });
+
+    const explanation = document.getElementById('explain'); explanation.className = 'explain';
+    let active = 'init';
+    if (!current) {
+      explanation.innerHTML = '<strong>準備開始。</strong>先從第 0 欄最上方往下看。<code>covered = False</code> 表示這一欄還沒遇到方塊。';
+    } else if (done) {
+      active = 'return'; explanation.className += ' done';
+      explanation.innerHTML = `<strong>全部 10 欄都檢查完了。</strong><br>盤面共有 <strong>${holes} 個洞</strong>，函式回傳 <code>${holes}</code>。`;
+    } else if (current.kind === 'block') {
+      active = 'block';
+      explanation.innerHTML = `<strong>board[${current.row}][${current.col}] = 1，有方塊。</strong><br>記住這一欄已遇到方塊；往下看到的空格就會算成洞。<span class="formula">covered = True，holes = ${holes}</span>`;
+    } else if (current.kind === 'hole') {
+      active = 'hole'; explanation.className += ' hole';
+      explanation.innerHTML = `<strong>board[${current.row}][${current.col}] = 0，是空格。</strong><br>同一欄的上方已經有方塊，所以這格是洞，數量加 1。<span class="formula">covered = True，holes = ${holes}</span>`;
+    } else {
+      active = 'scan';
+      explanation.innerHTML = `<strong>board[${current.row}][${current.col}] = 0，是空格。</strong><br>這一欄目前還沒遇到方塊，因此不算洞。<span class="formula">covered = False，holes = ${holes}</span>`;
+    }
+    document.querySelectorAll('#code .line').forEach(el => el.classList.toggle('active',el.dataset.line === active));
+  }
+  document.getElementById('next').addEventListener('click', () => { if (processed < ROWS*COLS) processed++; render(); });
+  document.getElementById('next-column').addEventListener('click', () => { processed = Math.min(ROWS*COLS,(Math.floor(processed/ROWS)+1)*ROWS); render(); });
+  document.getElementById('finish').addEventListener('click', () => { processed = ROWS*COLS; render(); });
+  document.getElementById('restart').addEventListener('click', resetScan);
+  document.getElementById('example').addEventListener('click', () => { board = exampleBoard(); resetScan(); });
+  render();
+</script>
+</body>
+</html>
