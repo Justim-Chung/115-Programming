@@ -1,5 +1,5 @@
 # 用來捕捉滑鼠座標的程式，按住 Ctrl + 滑鼠右鍵可以記錄目前滑鼠位置，按 Ctrl+C 結束程式，最後會列出所有記錄的座標，並計算前兩個座標的寬度、高度和中心點。
-# 使用這支程式，要先安G裝 pynput 套件，安裝方式：pip install pynput
+# 使用這支程式，要先安裝 pynput 套件，安裝方式：pip install pynput
 import ctypes
 import signal
 import sys

@@ -12,11 +12,11 @@ import pyautogui
 
 # 先用 capture_coordinates.py 量好，再填入自己的螢幕座標。
 # 左上、右上都是盤面「內側」邊界；格子高度依照盤面寬度推算。
-BOARD_TOP_LEFT = (259,786)# 例如 (246, 233)
-BOARD_TOP_RIGHT = (555, 786)# 例如 (556, 233)
+BOARD_TOP_LEFT = (294,245)# 例如 (246, 233)
+BOARD_TOP_RIGHT = (594, 245)# 例如 (556, 233)
 # 框住 NEXT 最上面的一塊，不要包含第二塊。
-NEXT_TOP_LEFT = (577,844)
-NEXT_BOTTOM_RIGHT = (632, 883)
+NEXT_TOP_LEFT = (629, 306)
+NEXT_BOTTOM_RIGHT = (674, 344)
 
 ROWS, COLS = 20, 10
 START_DELAY = 5            # 切回遊戲的時間
